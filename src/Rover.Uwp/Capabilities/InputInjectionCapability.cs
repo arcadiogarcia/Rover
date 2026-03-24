@@ -22,6 +22,19 @@ namespace Rover.Uwp.Capabilities
         private InputInjector? _injector;
         private ICoordinateResolver? _resolver;
         private Func<Func<Task>, Task>? _runOnUiThread;
+        private string? _logDir;
+
+        private void LogToFile(string message)
+        {
+            try
+            {
+                if (_logDir == null) return;
+                var path = System.IO.Path.Combine(_logDir, "input-injection.log");
+                System.IO.File.AppendAllText(path,
+                    $"{DateTimeOffset.Now:o} {message}{Environment.NewLine}");
+            }
+            catch { /* best-effort */ }
+        }
 
         private const string TapSchema = @"{
   ""type"": ""object"",
@@ -52,68 +65,51 @@ namespace Rover.Uwp.Capabilities
         {
             _resolver = context.CoordinateResolver;
             _runOnUiThread = context.RunOnUiThread;
+            _logDir = context.ArtifactDirectory;
+
+            LogToFile($"StartAsync called. RunOnUiThread={context.RunOnUiThread != null}");
+            LogToFile($"Process arch: {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}");
 
             // InputInjector must be created on the UI thread.
-            // NOTE: InputInjector.TryCreate() can fail with COM errors on some systems (0x800700C1)
-            // due to architecture mismatches. We handle this gracefully and log the error.
             if (context.RunOnUiThread != null)
             {
                 await context.RunOnUiThread(() =>
                 {
-                    try
-                    {
-                        _injector = InputInjector.TryCreate();
-                        
-                        if (_injector == null)
-                        {
-                            System.Diagnostics.Debug.WriteLine("[InputInjection] Failed to create InputInjector (returned null)");
-                        }
-                        else
-                        {
-                            System.Diagnostics.Debug.WriteLine("[InputInjection] InputInjector created successfully");
-                        }
-                    }
-                    catch (InvalidCastException ex)
-                    {
-                        // Common on x64 builds due to COM architecture mismatch (HRESULT 0x800700C1)
-                        System.Diagnostics.Debug.WriteLine($"[InputInjection] COM cast error creating InputInjector: {ex.Message}");
-                        System.Diagnostics.Debug.WriteLine("[InputInjection] Input injection will not be available");
-                        _injector = null;
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[InputInjection] Unexpected error creating InputInjector: {ex}");
-                        _injector = null;
-                    }
-                    
+                    TryCreateInjector();
                     return Task.CompletedTask;
                 }).ConfigureAwait(false);
             }
             else
             {
-                try
+                TryCreateInjector();
+            }
+        }
+
+        private void TryCreateInjector()
+        {
+            try
+            {
+                LogToFile("Calling InputInjector.TryCreate()...");
+                _injector = InputInjector.TryCreate();
+
+                if (_injector == null)
                 {
-                    _injector = InputInjector.TryCreate();
-                    
-                    if (_injector == null)
-                    {
-                        System.Diagnostics.Debug.WriteLine("[InputInjection] Failed to create InputInjector (returned null)");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine("[InputInjection] InputInjector created successfully");
-                    }
+                    LogToFile("InputInjector.TryCreate() returned null");
+                    System.Diagnostics.Debug.WriteLine("[InputInjection] Failed to create InputInjector (returned null)");
                 }
-                catch (InvalidCastException ex)
+                else
                 {
-                    System.Diagnostics.Debug.WriteLine($"[InputInjection] COM cast error creating InputInjector: {ex.Message}");
-                    _injector = null;
+                    LogToFile("InputInjector created successfully!");
+                    System.Diagnostics.Debug.WriteLine("[InputInjection] InputInjector created successfully");
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[InputInjection] Unexpected error creating InputInjector: {ex}");
-                    _injector = null;
-                }
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"InputInjector.TryCreate() FAILED: {ex.GetType().FullName}: {ex.Message}");
+                LogToFile($"HRESULT: 0x{ex.HResult:X8}");
+                LogToFile($"StackTrace: {ex.StackTrace}");
+                System.Diagnostics.Debug.WriteLine($"[InputInjection] Error creating InputInjector: {ex}");
+                _injector = null;
             }
         }
 
@@ -144,10 +140,24 @@ namespace Rover.Uwp.Capabilities
             var req = JsonConvert.DeserializeObject<InjectTapRequest>(argsJson)
                       ?? new InjectTapRequest();
 
+            LogToFile($"InjectTapAsync called: x={req.X}, y={req.Y}, space={req.CoordinateSpace}, device={req.Device}");
+            LogToFile($"_injector is {(_injector == null ? "NULL" : "available")}");
+
             var injector = _injector;
             if (injector != null)
             {
-                return InjectTapViaInjector(injector, req);
+                LogToFile("Using InputInjector path");
+                try
+                {
+                    var result = InjectTapViaInjector(injector, req);
+                    LogToFile($"InputInjector tap succeeded");
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    LogToFile($"InputInjector tap FAILED: {ex.GetType().FullName}: {ex.Message} HRESULT=0x{ex.HResult:X8}");
+                    // Fall through to automation
+                }
             }
 
             // Fallback: use XAML automation peers when InputInjector is not available

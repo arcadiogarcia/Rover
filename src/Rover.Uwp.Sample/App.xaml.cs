@@ -15,6 +15,8 @@ namespace Rover.Uwp.Sample
 {
     sealed partial class App : Application
     {
+        private static bool _windowClosed;
+
         public App()
         {
             this.InitializeComponent();
@@ -37,6 +39,9 @@ namespace Rover.Uwp.Sample
                 if (rootFrame.Content == null)
                     rootFrame.Navigate(typeof(MainPage), e.Arguments);
                 Window.Current.Activate();
+
+                // Track when the user closes the window so the FullTrust process can shut down
+                Window.Current.Closed += (s, a) => _windowClosed = true;
             }
 
 #if DEBUG
@@ -127,6 +132,7 @@ namespace Rover.Uwp.Sample
                 case "ping":
                     response["status"] = "success";
                     response["message"] = "pong";
+                    response["windowClosed"] = _windowClosed;
                     break;
 
                 case "list_tools":

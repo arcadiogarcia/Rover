@@ -165,6 +165,10 @@
     <Compile Include="..\Rover.Core\Tools\InputInjection\InjectTapResponse.cs" Link="Linked\Rover.Core\Tools\InjectTapResponse.cs" />
     <Compile Include="..\Rover.Core\Tools\Screenshot\CaptureViewRequest.cs" Link="Linked\Rover.Core\Tools\CaptureViewRequest.cs" />
     <Compile Include="..\Rover.Core\Tools\Screenshot\CaptureViewResponse.cs" Link="Linked\Rover.Core\Tools\CaptureViewResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\Screenshot\CaptureRegionRequest.cs" Link="Linked\Rover.Core\Tools\CaptureRegionRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\Screenshot\CaptureRegionResponse.cs" Link="Linked\Rover.Core\Tools\CaptureRegionResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\Screenshot\ValidatePositionRequest.cs" Link="Linked\Rover.Core\Tools\ValidatePositionRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\Screenshot\ValidatePositionResponse.cs" Link="Linked\Rover.Core\Tools\ValidatePositionResponse.cs" />
   </ItemGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>

@@ -5,13 +5,19 @@ using Newtonsoft.Json;
 
 namespace Rover.Core.Tools.Screenshot
 {
-    public sealed class CaptureViewRequest
+    public sealed class ValidatePositionRequest
     {
         #if !WINDOWS_UWP
-        [JsonPropertyName("format")]
+        [JsonPropertyName("x")]
 #endif
-        [JsonProperty("format")]
-        public string Format { get; set; } = "png";
+        [JsonProperty("x")]
+        public double X { get; set; }
+
+        #if !WINDOWS_UWP
+        [JsonPropertyName("y")]
+#endif
+        [JsonProperty("y")]
+        public double Y { get; set; }
 
         #if !WINDOWS_UWP
         [JsonPropertyName("maxWidth")]
@@ -26,6 +32,3 @@ namespace Rover.Core.Tools.Screenshot
         public int? MaxHeight { get; set; }
     }
 }
-
-
-

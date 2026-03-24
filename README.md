@@ -162,7 +162,8 @@ MCP Client (tests, AI agents, etc.)
 
 | Tool | Description |
 |---|---|
-| `capture_current_view` | Renders the XAML visual tree to a PNG file. Returns `{ success, filePath, width, height }` |
+| `capture_current_view` | Renders the XAML visual tree to a PNG file. Returns `{ success, filePath, width, height }`. To convert pixel positions to normalized coords: `x = px / width`, `y = py / height` |
+| `capture_region` | Captures a cropped region of the app window. Params: `x`, `y`, `width`, `height` (all normalized 0–1). Returns the cropped PNG plus full dimensions for coordinate conversion |
 | `inject_tap` | Taps at coordinates. Params: `x`, `y`, `coordinateSpace` (normalized/absolute/client), `device` |
 | `inject_drag_path` | Drags along a path. Params: `points[]`, `durationMs`, `coordinateSpace`, `device` |
 

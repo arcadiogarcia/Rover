@@ -38,10 +38,90 @@ class Program
         var tools = await backend.ListToolsAsync();
         Console.Error.WriteLine($"[McpServer] Discovered {tools.Count} tools");
 
+        // Win32 input injector — handles input injection directly via SendInput
+        // instead of routing through the UWP InputInjector API which fails on many configs.
+        var win32Input = new Win32InputInjector();
+
         foreach (var tool in tools)
         {
             Console.Error.WriteLine($"[McpServer] Registering proxy tool: {tool.Name}");
             var capturedName = tool.Name;
+
+            if (capturedName == "inject_tap")
+            {
+                // Handle tap directly in FullTrust via Win32 SendInput.
+                // Falls back to UWP automation if SendInput fails (e.g., window not found).
+                adapter.RegisterTool(tool.Name, tool.Description, tool.InputSchema, async argsJson =>
+                {
+                    try
+                    {
+                        var req = Newtonsoft.Json.JsonConvert.DeserializeObject<Rover.Core.Tools.InputInjection.InjectTapRequest>(argsJson)
+                                  ?? new Rover.Core.Tools.InputInjection.InjectTapRequest();
+                        bool ok = win32Input.InjectTap(req.X, req.Y, req.CoordinateSpace ?? "normalized");
+                        if (ok)
+                        {
+                            return Newtonsoft.Json.JsonConvert.SerializeObject(new
+                            {
+                                success = true,
+                                resolvedCoordinates = new { x = req.X, y = req.Y },
+                                device = "mouse",
+                                method = "win32_sendinput",
+                                timestamp = DateTimeOffset.UtcNow.ToString("o")
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[McpServer] Win32 tap failed, falling back to UWP: {ex.Message}");
+                    }
+                    // Fallback to UWP automation
+                    return await backend.InvokeToolAsync(capturedName, argsJson);
+                });
+                continue;
+            }
+
+            if (capturedName == "inject_drag_path")
+            {
+                // Handle drag directly in FullTrust via Win32 SendInput.
+                adapter.RegisterTool(tool.Name, tool.Description, tool.InputSchema, async argsJson =>
+                {
+                    try
+                    {
+                        var req = Newtonsoft.Json.JsonConvert.DeserializeObject<Rover.Core.Tools.InputInjection.InjectDragPathRequest>(argsJson)
+                                  ?? new Rover.Core.Tools.InputInjection.InjectDragPathRequest();
+                        var points = new List<(double x, double y)>();
+                        foreach (var pt in req.Points)
+                            points.Add((pt.X, pt.Y));
+
+                        bool ok = await win32Input.InjectDragPath(points, req.DurationMs, req.CoordinateSpace ?? "normalized");
+                        if (ok)
+                        {
+                            var resolvedPath = new List<object>();
+                            foreach (var pt in req.Points)
+                                resolvedPath.Add(new { x = pt.X, y = pt.Y });
+
+                            return Newtonsoft.Json.JsonConvert.SerializeObject(new
+                            {
+                                success = true,
+                                pointCount = req.Points.Count,
+                                durationMs = req.DurationMs,
+                                resolvedPath,
+                                device = "mouse",
+                                method = "win32_sendinput",
+                                timestamp = DateTimeOffset.UtcNow.ToString("o")
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"[McpServer] Win32 drag failed, falling back to UWP: {ex.Message}");
+                    }
+                    // Fallback to UWP automation
+                    return await backend.InvokeToolAsync(capturedName, argsJson);
+                });
+                continue;
+            }
+
             adapter.RegisterTool(tool.Name, tool.Description, tool.InputSchema, async argsJson =>
             {
                 return await backend.InvokeToolAsync(capturedName, argsJson);
@@ -51,12 +131,12 @@ class Program
         if (useStdio)
         {
             Console.Error.WriteLine("[McpServer] Running in stdio mode");
-            await McpServerRunner.RunStdioAsync(adapter, Console.OpenStandardInput(), Console.OpenStandardOutput());
+            await McpServerRunner.RunStdioAsync(adapter, Console.OpenStandardInput(), Console.OpenStandardOutput(), backend.ShutdownToken);
         }
         else
         {
             Console.Error.WriteLine($"[McpServer] Running HTTP server on port {port}");
-            await McpServerRunner.RunHttpAsync(adapter, port);
+            await McpServerRunner.RunHttpAsync(adapter, port, backend.ShutdownToken);
         }
 
         Console.Error.WriteLine("[McpServer] MCP server shutting down");
@@ -83,7 +163,14 @@ internal static class McpServerRunner
         var server = ModelContextProtocol.Server.McpServer.Create(transport, options);
 
         Console.Error.WriteLine("[McpServer] MCP server running (stdio)");
-        await server.RunAsync(cancellationToken);
+        try
+        {
+            await server.RunAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            Console.Error.WriteLine("[McpServer] Stdio server stopped (host app closed)");
+        }
     }
 
     /// <summary>Runs the MCP server as an HTTP endpoint using ASP.NET Core + MapMcp().</summary>
@@ -112,6 +199,9 @@ internal static class McpServerRunner
         var app = builder.Build();
         app.MapMcp("/mcp");
 
+        // Stop the HTTP server when the UWP host app closes
+        cancellationToken.Register(() => app.Lifetime.StopApplication());
+
         Console.Error.WriteLine($"[McpServer] MCP server running on http://localhost:{port}/mcp");
         await app.RunAsync();
     }
@@ -137,21 +227,26 @@ internal static class McpServerRunner
 internal sealed class AppServiceToolBackend : IToolBackend, IDisposable
 {
     private AppServiceConnection? _connection;
+    private readonly CancellationTokenSource _cts = new();
+    private readonly string _logPath = System.IO.Path.Combine(
+        Windows.Storage.ApplicationData.Current.LocalFolder.Path,
+        "fulltrust-server.log");
+
+    /// <summary>
+    /// Token that is cancelled when the AppService connection to the UWP host is lost
+    /// (e.g. the UWP app is closed). Use this to shut down the MCP server.
+    /// </summary>
+    public CancellationToken ShutdownToken => _cts.Token;
+
+    private void Log(string msg)
+    {
+        var line = $"{DateTimeOffset.Now:o} {msg}";
+        Console.Error.WriteLine($"[McpServer] {msg}");
+        try { System.IO.File.AppendAllText(_logPath, line + "\r\n"); } catch { }
+    }
 
     public async Task ConnectAsync()
     {
-        // Log to a file in the package's LocalState so we can diagnose issues
-        var logPath = System.IO.Path.Combine(
-            Windows.Storage.ApplicationData.Current.LocalFolder.Path,
-            "fulltrust-server.log");
-
-        void Log(string msg)
-        {
-            var line = $"{DateTimeOffset.Now:o} {msg}";
-            Console.Error.WriteLine($"[McpServer] {msg}");
-            try { System.IO.File.AppendAllText(logPath, line + "\r\n"); } catch { }
-        }
-
         var familyName = Windows.ApplicationModel.Package.Current.Id.FamilyName;
         Log($"PackageFamilyName: {familyName}");
 
@@ -166,10 +261,18 @@ internal sealed class AppServiceToolBackend : IToolBackend, IDisposable
                 PackageFamilyName = familyName
             };
 
+            _connection.ServiceClosed += (sender, closeArgs) =>
+            {
+                Log($"AppService connection closed: {closeArgs.Status} — shutting down");
+                if (!_cts.IsCancellationRequested)
+                    _cts.Cancel();
+            };
+
             var status = await _connection.OpenAsync();
             if (status == AppServiceConnectionStatus.Success)
             {
                 Log($"AppService connected on attempt {attempt}");
+                StartHeartbeat();
                 return;
             }
 
@@ -225,8 +328,74 @@ internal sealed class AppServiceToolBackend : IToolBackend, IDisposable
         throw new Exception($"Tool invocation failed: {error}");
     }
 
+    /// <summary>
+    /// Periodically pings the UWP AppService. If the ping fails (host app closed/suspended),
+    /// the shutdown token is cancelled so the MCP server exits.
+    /// </summary>
+    private void StartHeartbeat()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                Log("Heartbeat monitor started");
+                const int intervalMs = 3000;
+                const int maxFailures = 2;
+                int failures = 0;
+
+                while (!_cts.IsCancellationRequested)
+                {
+                    await Task.Delay(intervalMs);
+                    if (_cts.IsCancellationRequested) break;
+
+                    try
+                    {
+                        var ping = new ValueSet { { "command", "ping" } };
+                        var resp = await _connection!.SendMessageAsync(ping);
+                        if (resp.Status == AppServiceResponseStatus.Success)
+                        {
+                            bool windowClosed = resp.Message.ContainsKey("windowClosed")
+                                                && resp.Message["windowClosed"] is bool wc && wc;
+                            if (windowClosed)
+                            {
+                                Log("Host app window closed — triggering shutdown");
+                                if (!_cts.IsCancellationRequested)
+                                    _cts.Cancel();
+                                break;
+                            }
+                            failures = 0;
+                            continue;
+                        }
+                        failures++;
+                        Log($"Heartbeat ping failed (status={resp.Status}), failure {failures}/{maxFailures}");
+                    }
+                    catch (Exception ex)
+                    {
+                        failures++;
+                        Log($"Heartbeat ping exception: {ex.Message}, failure {failures}/{maxFailures}");
+                    }
+
+                    if (failures >= maxFailures)
+                    {
+                        Log("Host app unreachable — triggering shutdown");
+                        if (!_cts.IsCancellationRequested)
+                            _cts.Cancel();
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Heartbeat task crashed: {ex}");
+            }
+        });
+    }
+
     public void Dispose()
     {
+        if (!_cts.IsCancellationRequested)
+            _cts.Cancel();
+        _cts.Dispose();
         _connection?.Dispose();
         _connection = null;
     }
