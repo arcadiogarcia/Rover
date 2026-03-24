@@ -1,0 +1,141 @@
+<Page
+    x:Class="Rover.Uwp.Sample.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <!--
+        Color Picker Test UI
+        Layout uses proportional rows (total 10*) so normalized-coordinate
+        tests can target elements at predictable Y positions:
+          Row 0 (1*): Title          → Y center ≈ 0.05
+          Row 1 (1*): Preset buttons → Y center ≈ 0.15
+          Row 2 (1*): R slider       → Y center ≈ 0.25
+          Row 3 (1*): G slider       → Y center ≈ 0.35
+          Row 4 (1*): B slider       → Y center ≈ 0.45
+          Row 5 (4*): Color preview  → Y center ≈ 0.70
+          Row 6 (1*): Hex label      → Y center ≈ 0.95
+        Button columns are 5 equal widths → X centers at 0.1, 0.3, 0.5, 0.7, 0.9
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="1*"/>
+            <RowDefinition Height="1*"/>
+            <RowDefinition Height="1*"/>
+            <RowDefinition Height="1*"/>
+            <RowDefinition Height="1*"/>
+            <RowDefinition Height="4*"/>
+            <RowDefinition Height="1*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Row 0: Title -->
+        <TextBlock Text="Color Picker Test" FontSize="24"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+        <!-- Row 1: Preset color buttons (5 equal columns) -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Content="Red" Grid.Column="0"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    Margin="4" Click="PresetColor_Click" Tag="FF0000"
+                    Foreground="White" FontWeight="Bold">
+                <Button.Background>
+                    <SolidColorBrush Color="#FFFF0000"/>
+                </Button.Background>
+            </Button>
+            <Button Content="Green" Grid.Column="1"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    Margin="4" Click="PresetColor_Click" Tag="00FF00"
+                    Foreground="White" FontWeight="Bold">
+                <Button.Background>
+                    <SolidColorBrush Color="#FF00FF00"/>
+                </Button.Background>
+            </Button>
+            <Button Content="Blue" Grid.Column="2"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    Margin="4" Click="PresetColor_Click" Tag="0000FF"
+                    Foreground="White" FontWeight="Bold">
+                <Button.Background>
+                    <SolidColorBrush Color="#FF0000FF"/>
+                </Button.Background>
+            </Button>
+            <Button Content="Yellow" Grid.Column="3"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    Margin="4" Click="PresetColor_Click" Tag="FFFF00"
+                    FontWeight="Bold">
+                <Button.Background>
+                    <SolidColorBrush Color="#FFFFFF00"/>
+                </Button.Background>
+            </Button>
+            <Button Content="White" Grid.Column="4"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    Margin="4" Click="PresetColor_Click" Tag="FFFFFF"
+                    FontWeight="Bold">
+                <Button.Background>
+                    <SolidColorBrush Color="#FFFFFFFF"/>
+                </Button.Background>
+            </Button>
+        </Grid>
+
+        <!-- Row 2: R slider -->
+        <Grid Grid.Row="2" Padding="20,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="30"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="40"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="R" VerticalAlignment="Center" FontSize="18" Foreground="Red" FontWeight="Bold"/>
+            <Slider x:Name="RedSlider" Grid.Column="1" Minimum="0" Maximum="255"
+                    Value="0" VerticalAlignment="Center"/>
+            <TextBlock x:Name="RedValue" Grid.Column="2" Text="0"
+                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
+        </Grid>
+
+        <!-- Row 3: G slider -->
+        <Grid Grid.Row="3" Padding="20,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="30"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="40"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="G" VerticalAlignment="Center" FontSize="18" Foreground="Green" FontWeight="Bold"/>
+            <Slider x:Name="GreenSlider" Grid.Column="1" Minimum="0" Maximum="255"
+                    Value="0" VerticalAlignment="Center"/>
+            <TextBlock x:Name="GreenValue" Grid.Column="2" Text="0"
+                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
+        </Grid>
+
+        <!-- Row 4: B slider -->
+        <Grid Grid.Row="4" Padding="20,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="30"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="40"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="B" VerticalAlignment="Center" FontSize="18" Foreground="Blue" FontWeight="Bold"/>
+            <Slider x:Name="BlueSlider" Grid.Column="1" Minimum="0" Maximum="255"
+                    Value="0" VerticalAlignment="Center"/>
+            <TextBlock x:Name="BlueValue" Grid.Column="2" Text="0"
+                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
+        </Grid>
+
+        <!-- Row 5: Color preview (fills the largest area) -->
+        <Rectangle x:Name="ColorPreview" Grid.Row="5" Margin="20,10">
+            <Rectangle.Fill>
+                <SolidColorBrush x:Name="PreviewBrush" Color="#FF000000"/>
+            </Rectangle.Fill>
+        </Rectangle>
+
+        <!-- Row 6: Hex color readout -->
+        <TextBlock x:Name="HexLabel" Grid.Row="6" Text="#000000"
+                   FontSize="28" FontFamily="Consolas"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Grid>
+</Page>
