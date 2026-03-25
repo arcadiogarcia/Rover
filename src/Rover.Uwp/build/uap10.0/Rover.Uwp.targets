@@ -15,13 +15,19 @@
     </SDKReference>
   </ItemGroup>
 
-  <!-- 2. Resolve FullTrust companion binaries based on build platform -->
+  <!-- 2. Resolve FullTrust companion binaries based on build platform.
+       For explicit platforms (ARM64, x64, etc.) we use the matching RID directly.
+       For AnyCPU, we detect the build machine's OS architecture so the correct
+       native FullTrust binary is included — this is critical on ARM64 machines
+       where the x64 InputInjector COM component fails under emulation. -->
   <PropertyGroup>
+    <_RoverHostIsArm64>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</_RoverHostIsArm64>
     <_RoverFullTrustRid Condition="'$(Platform)' == 'ARM64'">win-arm64</_RoverFullTrustRid>
     <_RoverFullTrustRid Condition="'$(Platform)' == 'ARM'">win-arm64</_RoverFullTrustRid>
     <_RoverFullTrustRid Condition="'$(Platform)' == 'x64'">win-x64</_RoverFullTrustRid>
     <_RoverFullTrustRid Condition="'$(Platform)' == 'x86'">win-x64</_RoverFullTrustRid>
-    <_RoverFullTrustRid Condition="'$(Platform)' == 'AnyCPU'">win-x64</_RoverFullTrustRid>
+    <_RoverFullTrustRid Condition="'$(Platform)' == 'AnyCPU' AND '$(_RoverHostIsArm64)' == 'Arm64'">win-arm64</_RoverFullTrustRid>
+    <_RoverFullTrustRid Condition="'$(Platform)' == 'AnyCPU' AND '$(_RoverHostIsArm64)' != 'Arm64'">win-x64</_RoverFullTrustRid>
     <_RoverFullTrustDir>$(MSBuildThisFileDirectory)..\..\tools\fulltrust\$(_RoverFullTrustRid)\</_RoverFullTrustDir>
   </PropertyGroup>
 
