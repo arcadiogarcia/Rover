@@ -135,6 +135,8 @@
     <Compile Include="Coordinates\UwpCoordinateResolver.cs" />
     <Compile Include="DebugHost.cs" />
     <Compile Include="DebugHostRunner.cs" />
+    <Compile Include="RoverAppService.cs" />
+    <Compile Include="RoverMcp.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <!-- netstandard.dll shim: required so the compiler can resolve base types (System.Enum,

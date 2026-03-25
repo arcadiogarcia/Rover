@@ -88,7 +88,7 @@ namespace Rover.Uwp
             }
 
             System.Diagnostics.Debug.WriteLine(
-                $"[Rover] '{_options.AppName}' MCP debug host started (AppService: com.rover.toolinvocation)");
+                $"[Rover] '{_options.AppName}' MCP debug host started");
         }
 
         public async Task StopAsync()
@@ -100,6 +100,7 @@ namespace Rover.Uwp
 
             System.Diagnostics.Debug.WriteLine("[Rover] Debug host stopped.");
         }
+
     }
 
     /// <summary>

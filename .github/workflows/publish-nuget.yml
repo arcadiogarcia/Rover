@@ -1,0 +1,69 @@
+name: Publish NuGet Package
+
+on:
+  push:
+    tags:
+      - 'v*'          # Triggered by pushing a tag like v0.1.0-preview
+  workflow_dispatch:   # Manual trigger from GitHub UI
+    inputs:
+      version:
+        description: 'Package version (e.g. 0.2.0-preview). Leave blank to use nuspec version.'
+        required: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $ver = '${{ github.event.inputs.version }}'
+          if (-not $ver -and '${{ github.ref_type }}' -eq 'tag') {
+            $ver = '${{ github.ref_name }}' -replace '^v', ''
+          }
+          if ($ver) {
+            Write-Host "Using version: $ver"
+            $xml = [xml](Get-Content src/Rover.Uwp/Rover.Uwp.nuspec -Raw)
+            $xml.package.metadata.version = $ver
+            $xml.Save('src/Rover.Uwp/Rover.Uwp.nuspec')
+          } else {
+            $xml = [xml](Get-Content src/Rover.Uwp/Rover.Uwp.nuspec -Raw)
+            $ver = $xml.package.metadata.version
+            Write-Host "Using nuspec version: $ver"
+          }
+          "version=$ver" >> $env:GITHUB_OUTPUT
+
+      - name: Build Rover.Uwp (Release)
+        run: msbuild src/Rover.Uwp/Rover.Uwp.csproj /p:Configuration=Release /p:Platform=AnyCPU /t:Build /v:minimal
+
+      - name: Publish FullTrust (win-x64)
+        run: dotnet publish src/Rover.FullTrust.McpServer/Rover.FullTrust.McpServer.csproj -c Release -r win-x64 --no-self-contained -o src/Rover.FullTrust.McpServer/bin/publish-fdd-x64
+
+      - name: Publish FullTrust (win-arm64)
+        run: dotnet publish src/Rover.FullTrust.McpServer/Rover.FullTrust.McpServer.csproj -c Release -r win-arm64 --no-self-contained -o src/Rover.FullTrust.McpServer/bin/publish-fdd-arm64
+
+      - name: Pack NuGet package
+        working-directory: src/Rover.Uwp/build
+        run: |
+          dotnet restore PackHelper.csproj
+          dotnet pack PackHelper.csproj -o ../bin/nupkg --no-build
+
+      - name: Push to nuget.org
+        run: dotnet nuget push src/Rover.Uwp/bin/nupkg/Rover.Uwp.${{ steps.version.outputs.version }}.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rover.Uwp.${{ steps.version.outputs.version }}.nupkg
+          path: src/Rover.Uwp/bin/nupkg/*.nupkg

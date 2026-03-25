@@ -2,111 +2,23 @@
 
 Rover is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) debug host that runs inside a UWP application, exposing screenshot capture and input injection as MCP tools. External clients (AI agents, test harnesses, etc.) connect over HTTP and can remotely observe and interact with the running app.
 
-## Install
+## Add Rover to Your UWP App
 
-> **Prerequisite:** The Rover UWP app must be deployed and running on your machine (see [Building](#building) below). The MCP server listens on `http://localhost:5100/mcp`.
+Install the NuGet package and integrate in three lines of code:
+
+```
+dotnet add package Rover.Uwp --prerelease
+```
+
+See the **[Integration Guide](docs/integration-guide.md)** for complete setup instructions, manifest configuration, MCP client setup for VS Code / Claude / Cursor / Windsurf, the full tool reference (16 tools), and troubleshooting.
+
+## Connect an MCP Client
+
+Once your app is running, point any MCP client at `http://localhost:5100/mcp`:
 
 [<img src="https://img.shields.io/badge/VS_Code-VS_Code?style=flat-square&label=Install%20Server&color=0098FF" alt="Install in VS Code">](https://vscode.dev/redirect/mcp/install?name=rover&config=%7B%22url%22%3A%22http%3A%2F%2Flocalhost%3A5100%2Fmcp%22%7D) [<img src="https://img.shields.io/badge/VS_Code_Insiders-VS_Code_Insiders?style=flat-square&label=Install%20Server&color=24bfa5" alt="Install in VS Code Insiders">](https://insiders.vscode.dev/redirect/mcp/install?name=rover&config=%7B%22url%22%3A%22http%3A%2F%2Flocalhost%3A5100%2Fmcp%22%7D) [<img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Install in Cursor">](https://cursor.com/en/install-mcp?name=rover&config=eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjUxMDAvbWNwIn0%3D) [<img src="https://img.shields.io/badge/Visual_Studio-Install-C16FDE?logo=visualstudio&logoColor=white" alt="Install in Visual Studio">](https://vs-open.link/mcp-install?%7B%22name%22%3A%22rover%22%2C%22url%22%3A%22http%3A%2F%2Flocalhost%3A5100%2Fmcp%22%7D)
 
-**Or install manually:**
-
-<details>
-<summary>VS Code / Copilot</summary>
-
-Add to `.vscode/mcp.json`:
-
-```json
-{
-  "servers": {
-    "rover": {
-      "type": "http",
-      "url": "http://localhost:5100/mcp"
-    }
-  }
-}
-```
-
-Or via CLI:
-
-```bash
-code --add-mcp '{"name":"rover","url":"http://localhost:5100/mcp"}'
-```
-
-</details>
-
-<details>
-<summary>Claude Desktop</summary>
-
-Add to `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "rover": {
-      "url": "http://localhost:5100/mcp"
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary>Claude Code</summary>
-
-```bash
-claude mcp add rover --transport http --url http://localhost:5100/mcp
-```
-
-</details>
-
-<details>
-<summary>Cursor</summary>
-
-Go to `Cursor Settings` → `MCP` → `New MCP Server`, then add:
-
-```json
-{
-  "mcpServers": {
-    "rover": {
-      "url": "http://localhost:5100/mcp"
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary>Windsurf</summary>
-
-Add to your MCP config following the <a href="https://docs.windsurf.com/windsurf/cascade/mcp#mcp-config-json">configure MCP guide</a>:
-
-```json
-{
-  "mcpServers": {
-    "rover": {
-      "serverUrl": "http://localhost:5100/mcp"
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary>Generic MCP client (C#)</summary>
-
-```csharp
-var transport = new HttpClientTransport(new HttpClientTransportOptions
-{
-    Endpoint = new Uri("http://localhost:5100/mcp")
-});
-var client = await McpClient.CreateAsync(transport);
-var tools = await client.ListToolsAsync();
-```
-
-</details>
+See [Connecting MCP Clients](docs/integration-guide.md#connecting-mcp-clients) for manual configuration for each client.
 
 ## Architecture
 
@@ -160,25 +72,9 @@ MCP Client (tests, AI agents, etc.)
 
 ## MCP Tools
 
-| Tool | Description |
-|---|---|
-| `capture_current_view` | Renders the XAML visual tree to a PNG file. Returns `{ success, filePath, width, height }`. To convert pixel positions to normalized coords: `x = px / width`, `y = py / height` |
-| `capture_region` | Captures a cropped region of the app window. Params: `x`, `y`, `width`, `height` (all normalized 0–1). Returns the cropped PNG plus full dimensions for coordinate conversion |
-| `inject_tap` | Taps at coordinates. Params: `x`, `y`, `coordinateSpace` (normalized/absolute/client), `device` |
-| `inject_drag_path` | Drags along a path. Params: `points[]`, `durationMs`, `coordinateSpace`, `device` |
+Rover exposes **16 tools** across screenshot capture, touch/mouse, keyboard, pen, and gamepad input. All tools use normalized coordinates (0.0–1.0) by default.
 
-### Coordinate spaces
-
-- **normalized** (default) — `0.0` to `1.0` relative to the app window
-- **absolute** — screen pixels
-- **client** — window-relative pixels (same as absolute for full-screen UWP)
-
-### Input injection fallback
-
-`InputInjector.TryCreate()` returns null on some Windows configurations even with the `inputInjectionBrokered` capability. When unavailable, Rover falls back to XAML automation:
-
-- **Taps**: `VisualTreeHelper.FindElementsInHostCoordinates()` → `IInvokeProvider.Invoke()` for buttons
-- **Drags**: Finds `Slider` at start point → `IRangeValueProvider.SetValue()` based on drag endpoint
+See the **[full tool reference](docs/integration-guide.md#available-tools)** for parameters, coordinate spaces, and dry-run preview support.
 
 ## Prerequisites
 
