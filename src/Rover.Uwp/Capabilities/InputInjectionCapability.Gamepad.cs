@@ -119,7 +119,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null)
             {
-                return JsonConvert.SerializeObject(new InjectGamepadInputResponse
+                return InjectorUnavailableResponse(new InjectGamepadInputResponse
                 {
                     Success = false,
                     Buttons = req.Buttons,
@@ -171,7 +171,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null || req.Frames.Count == 0)
             {
-                return JsonConvert.SerializeObject(new InjectGamepadSequenceResponse
+                return InjectorUnavailableResponse(new InjectGamepadSequenceResponse
                 {
                     Success = false,
                     FrameCount = req.Frames.Count,

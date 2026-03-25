@@ -58,7 +58,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null)
             {
-                return JsonConvert.SerializeObject(new InjectKeyPressResponse
+                return InjectorUnavailableResponse(new InjectKeyPressResponse
                 {
                     Success = false,
                     Key = req.Key,
@@ -149,7 +149,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null || string.IsNullOrEmpty(req.Text))
             {
-                return JsonConvert.SerializeObject(new InjectTextResponse
+                return InjectorUnavailableResponse(new InjectTextResponse
                 {
                     Success = false,
                     CharacterCount = 0

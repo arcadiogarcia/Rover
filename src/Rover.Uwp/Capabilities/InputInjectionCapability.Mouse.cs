@@ -108,7 +108,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null)
             {
-                return JsonConvert.SerializeObject(new InjectMouseScrollResponse
+                return InjectorUnavailableResponse(new InjectMouseScrollResponse
                 {
                     Success = false,
                     DeltaY = req.DeltaY,
@@ -215,7 +215,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null)
             {
-                return JsonConvert.SerializeObject(new InjectMouseMoveResponse
+                return InjectorUnavailableResponse(new InjectMouseMoveResponse
                 {
                     Success = false,
                     PreviewScreenshotPath = previewPath

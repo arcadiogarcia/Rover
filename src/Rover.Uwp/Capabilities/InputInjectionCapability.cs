@@ -9,11 +9,6 @@ using Rover.Core.Tools.InputInjection;
 using Windows.Foundation;
 using Windows.UI.Input.Preview.Injection;
 using Windows.UI.Xaml;
-using Windows.UI.Xaml.Automation.Peers;
-using Windows.UI.Xaml.Automation.Provider;
-using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
-using Windows.UI.Xaml.Media;
 
 namespace Rover.Uwp.Capabilities
 {
@@ -23,6 +18,33 @@ namespace Rover.Uwp.Capabilities
         private ICoordinateResolver? _resolver;
         private Func<Func<Task>, Task>? _runOnUiThread;
         private string? _logDir;
+        private string? _injectorError;
+
+        private const string InjectorUnavailableMessage =
+            "InputInjector is not available. Ensure the 'inputInjectionBrokered' restricted capability " +
+            "is declared in Package.appxmanifest and the app is running with the required permissions.";
+
+        /// <summary>
+        /// True if the InputInjector API was successfully created during startup.
+        /// </summary>
+        public bool InjectorAvailable => _injector != null;
+
+        /// <summary>
+        /// If <see cref="InjectorAvailable"/> is false, contains the reason.
+        /// </summary>
+        public string? InjectorError => _injectorError;
+
+        /// <summary>
+        /// Returns a JSON error response with the standard unavailable message.
+        /// The JSON includes "success": false and "error": "...".
+        /// </summary>
+        private string InjectorUnavailableResponse(object responseObj)
+        {
+            var json = JsonConvert.SerializeObject(responseObj);
+            var obj = Newtonsoft.Json.Linq.JObject.Parse(json);
+            obj["error"] = _injectorError ?? InjectorUnavailableMessage;
+            return obj.ToString(Formatting.None);
+        }
 
         private void LogToFile(string message)
         {
@@ -89,10 +111,21 @@ namespace Rover.Uwp.Capabilities
             try
             {
                 _injector = InputInjector.TryCreate();
-                LogToFile(_injector != null ? "InputInjector created" : "InputInjector.TryCreate() returned null");
+                if (_injector != null)
+                {
+                    LogToFile("InputInjector created");
+                    _injectorError = null;
+                }
+                else
+                {
+                    _injectorError = InjectorUnavailableMessage;
+                    LogToFile("InputInjector.TryCreate() returned null — " + _injectorError);
+                }
             }
             catch (Exception ex)
             {
+                _injectorError = $"InputInjector.TryCreate() threw {ex.GetType().Name}: {ex.Message} (HRESULT 0x{ex.HResult:X8}). " +
+                                 "Ensure the 'inputInjectionBrokered' restricted capability is declared in Package.appxmanifest.";
                 LogToFile($"InputInjector.TryCreate() FAILED: {ex.GetType().FullName}: {ex.Message}");
                 LogToFile($"HRESULT: 0x{ex.HResult:X8}");
                 LogToFile($"StackTrace: {ex.StackTrace}");
@@ -205,22 +238,14 @@ namespace Rover.Uwp.Capabilities
                     {
                         LogToFile($"InputInjector tap FAILED: {innerEx.GetType().FullName}: {innerEx.Message} HRESULT=0x{innerEx.HResult:X8}");
                     }
-                    // Fall through to automation
                 }
                 catch (Exception ex)
                 {
                     LogToFile($"InputInjector tap outer FAILED: {ex.GetType().FullName}: {ex.Message}");
-                    // Fall through to automation
                 }
             }
 
-            // Fallback: use XAML automation peers when InputInjector is not available
-            if (_runOnUiThread != null)
-            {
-                var automationResult = await InjectTapViaAutomation(req).ConfigureAwait(false);
-                return AttachPreviewPath(automationResult, previewPath);
-            }
-
+            LogToFile("InputInjector is not available. Ensure the inputInjectionBrokered capability is declared.");
             var errorResponse = new InjectTapResponse
             {
                 Success = false,
@@ -229,8 +254,7 @@ namespace Rover.Uwp.Capabilities
                 PreviewScreenshotPath = previewPath,
                 Timestamp = DateTimeOffset.UtcNow.ToString("o")
             };
-            System.Diagnostics.Debug.WriteLine("[InputInjection] Cannot inject tap - no injection method available");
-            return JsonConvert.SerializeObject(errorResponse);
+            return InjectorUnavailableResponse(errorResponse);
         }
 
         private string InjectTapViaInjector(InputInjector injector, InjectTapRequest req)
@@ -338,69 +362,6 @@ namespace Rover.Uwp.Capabilities
             return JsonConvert.SerializeObject(response);
         }
 
-        private async Task<string> InjectTapViaAutomation(InjectTapRequest req)
-        {
-            bool success = false;
-            CoordinatePoint clientPt = new CoordinatePoint(req.X, req.Y);
-
-            await _runOnUiThread!(async () =>
-            {
-                var root = Window.Current.Content as UIElement;
-                if (root == null) { LogToFile("Automation: root is null"); return; }
-
-                // Convert normalized coordinates to view-pixel coordinates
-                var bounds = Window.Current.Bounds;
-                LogToFile($"Automation: Window.Bounds=({bounds.X},{bounds.Y},{bounds.Width},{bounds.Height})");
-                double viewX = req.X * bounds.Width;
-                double viewY = req.Y * bounds.Height;
-                var space = ParseSpace(req.CoordinateSpace);
-                if (space == CoordinateSpace.Absolute || space == CoordinateSpace.Client)
-                {
-                    viewX = req.X;
-                    viewY = req.Y;
-                }
-
-                clientPt = new CoordinatePoint(viewX, viewY);
-                var point = new Point(viewX, viewY);
-                LogToFile($"Automation: hit test at ({viewX:F1},{viewY:F1})");
-
-                var elements = VisualTreeHelper.FindElementsInHostCoordinates(point, root);
-                int count = 0;
-                foreach (var element in elements)
-                {
-                    count++;
-                    LogToFile($"Automation: element[{count}] = {element.GetType().Name}" +
-                              (element is FrameworkElement fe ? $" Name='{fe.Name}'" : "") +
-                              (element is ContentControl cc ? $" Content='{cc.Content}'" : ""));
-
-                    // Try Button first
-                    if (element is ButtonBase button)
-                    {
-                        LogToFile($"Automation: Found ButtonBase! Content='{button.Content}'");
-                        var peer = FrameworkElementAutomationPeer.CreatePeerForElement(button);
-                        if (peer?.GetPattern(PatternInterface.Invoke) is IInvokeProvider invoker)
-                        {
-                            invoker.Invoke();
-                            success = true;
-                            LogToFile("Automation: Invoked successfully!");
-                            return;
-                        }
-                    }
-                }
-                LogToFile($"Automation: found {count} elements, success={success}");
-
-                await Task.CompletedTask;
-            }).ConfigureAwait(false);
-
-            var response = new InjectTapResponse
-            {
-                Success = success,
-                ResolvedCoordinates = clientPt,
-                Device = req.Device
-            };
-            return JsonConvert.SerializeObject(response);
-        }
-
         private async Task<string> InjectDragPathAsync(string argsJson)
         {
             var req = JsonConvert.DeserializeObject<InjectDragPathRequest>(argsJson)
@@ -463,13 +424,7 @@ namespace Rover.Uwp.Capabilities
                 }
             }
 
-            // Fallback: use XAML automation peers for Slider manipulation
-            if (_runOnUiThread != null)
-            {
-                var automationResult = await InjectDragViaAutomation(req).ConfigureAwait(false);
-                return AttachPreviewPath(automationResult, previewPath);
-            }
-
+            LogToFile("InputInjector is not available. Ensure the inputInjectionBrokered capability is declared.");
             var errorResponse = new InjectDragPathResponse
             {
                 Success = false,
@@ -479,7 +434,7 @@ namespace Rover.Uwp.Capabilities
                 ResolvedPath = new List<CoordinatePoint>(),
                 PreviewScreenshotPath = previewPath
             };
-            return JsonConvert.SerializeObject(errorResponse);
+            return InjectorUnavailableResponse(errorResponse);
         }
 
         private async Task<string?> InjectDragViaInjectorAsync(InputInjector injector, InjectDragPathRequest req)
@@ -660,88 +615,6 @@ namespace Rover.Uwp.Capabilities
                 ResolvedPath = resolvedPath,
                 Device = useTouch ? "touch" : "mouse"
             });
-        }
-
-        private async Task<string> InjectDragViaAutomation(InjectDragPathRequest req)
-        {
-            bool success = false;
-            var resolvedPath = new List<CoordinatePoint>();
-
-            await _runOnUiThread!(async () =>
-            {
-                var root = Window.Current.Content as UIElement;
-                if (root == null || req.Points.Count < 2) return;
-
-                var bounds = Window.Current.Bounds;
-                var space = ParseSpace(req.CoordinateSpace);
-
-                // Convert all points to view-pixel coordinates
-                var viewPoints = new List<Point>();
-                foreach (var pt in req.Points)
-                {
-                    double vx, vy;
-                    if (space == CoordinateSpace.Normalized)
-                    {
-                        vx = pt.X * bounds.Width;
-                        vy = pt.Y * bounds.Height;
-                    }
-                    else
-                    {
-                        vx = pt.X;
-                        vy = pt.Y;
-                    }
-                    viewPoints.Add(new Point(vx, vy));
-                    resolvedPath.Add(new CoordinatePoint(vx, vy));
-                }
-
-                // Find element at the start point
-                var startPoint = viewPoints[0];
-                LogToFile($"Drag automation: startPoint=({startPoint.X:F1},{startPoint.Y:F1}) bounds=({bounds.Width},{bounds.Height})");
-                var elements = VisualTreeHelper.FindElementsInHostCoordinates(startPoint, root);
-
-                foreach (var element in elements)
-                {
-                    LogToFile($"Drag automation: found {element.GetType().Name}" +
-                              (element is FrameworkElement fe2 ? $" Name='{fe2.Name}'" : ""));
-                    if (element is Slider slider)
-                    {
-                        // Calculate value from the end point relative to the slider's bounds
-                        var sliderBounds = element.TransformToVisual(root).TransformBounds(
-                            new Rect(0, 0, slider.ActualWidth, slider.ActualHeight));
-
-                        var endPoint = viewPoints[viewPoints.Count - 1];
-                        double fraction = (endPoint.X - sliderBounds.X) / sliderBounds.Width;
-                        fraction = Math.Max(0, Math.Min(1, fraction));
-
-                        double newValue = slider.Minimum + fraction * (slider.Maximum - slider.Minimum);
-
-                        var peer = FrameworkElementAutomationPeer.CreatePeerForElement(slider);
-                        if (peer?.GetPattern(PatternInterface.RangeValue) is IRangeValueProvider rangeProvider)
-                        {
-                            rangeProvider.SetValue(newValue);
-                            success = true;
-                            return;
-                        }
-
-                        // Direct fallback if peer doesn't work
-                        slider.Value = newValue;
-                        success = true;
-                        return;
-                    }
-                }
-
-                await Task.CompletedTask;
-            }).ConfigureAwait(false);
-
-            var response = new InjectDragPathResponse
-            {
-                Success = success,
-                PointCount = resolvedPath.Count,
-                DurationMs = req.DurationMs,
-                ResolvedPath = resolvedPath,
-                Device = req.Device
-            };
-            return JsonConvert.SerializeObject(response);
         }
 
         #region Preview screenshot helpers

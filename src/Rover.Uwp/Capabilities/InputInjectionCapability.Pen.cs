@@ -130,7 +130,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null)
             {
-                return JsonConvert.SerializeObject(new InjectPenTapResponse
+                return InjectorUnavailableResponse(new InjectPenTapResponse
                 {
                     Success = false,
                     Pressure = req.Pressure,
@@ -258,7 +258,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null || req.Points.Count < 2)
             {
-                return JsonConvert.SerializeObject(new InjectPenStrokeResponse
+                return InjectorUnavailableResponse(new InjectPenStrokeResponse
                 {
                     Success = false,
                     PointCount = req.Points.Count,

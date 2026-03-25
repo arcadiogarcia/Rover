@@ -131,7 +131,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null || req.Pointers.Count == 0)
             {
-                return JsonConvert.SerializeObject(new InjectMultiTouchResponse
+                return InjectorUnavailableResponse(new InjectMultiTouchResponse
                 {
                     Success = false,
                     PointerCount = req.Pointers.Count,
@@ -378,7 +378,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null)
             {
-                return JsonConvert.SerializeObject(new InjectPinchResponse
+                return InjectorUnavailableResponse(new InjectPinchResponse
                 {
                     Success = false,
                     Pointer1Start = p1Start,
@@ -501,7 +501,7 @@ namespace Rover.Uwp.Capabilities
             var injector = _injector;
             if (injector == null || _runOnUiThread == null)
             {
-                return JsonConvert.SerializeObject(new InjectRotateResponse
+                return InjectorUnavailableResponse(new InjectRotateResponse
                 {
                     Success = false,
                     Pointer1Start = p1Start,

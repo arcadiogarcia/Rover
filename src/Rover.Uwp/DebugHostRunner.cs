@@ -64,6 +64,16 @@ namespace Rover.Uwp
                 await capability.StartAsync(context).ConfigureAwait(false);
             }
 
+            // Check InputInjection health
+            foreach (var capability in _capabilities)
+            {
+                if (capability is InputInjectionCapability inputCapability && !inputCapability.InjectorAvailable)
+                {
+                    var error = inputCapability.InjectorError ?? "InputInjector.TryCreate() returned null";
+                    System.Diagnostics.Debug.WriteLine($"[Rover] WARNING: Input injection unavailable — {error}");
+                }
+            }
+
             // Start IPC listener for tool invocation from FullTrust process
             // Register capabilities as tools with the AppService ToolRegistry
             // The AppService background task will handle tool invocations
