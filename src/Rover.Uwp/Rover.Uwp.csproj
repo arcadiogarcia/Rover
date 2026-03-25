@@ -125,6 +125,11 @@
     <Compile Include="AppService\RoverToolInvocationService.cs" />
     <Compile Include="AppService\ToolRegistry.cs" />
     <Compile Include="Capabilities\InputInjectionCapability.cs" />
+    <Compile Include="Capabilities\InputInjectionCapability.Keyboard.cs" />
+    <Compile Include="Capabilities\InputInjectionCapability.Mouse.cs" />
+    <Compile Include="Capabilities\InputInjectionCapability.Touch.cs" />
+    <Compile Include="Capabilities\InputInjectionCapability.Pen.cs" />
+    <Compile Include="Capabilities\InputInjectionCapability.Gamepad.cs" />
     <Compile Include="Capabilities\ScreenshotAnnotator.cs" />
     <Compile Include="Capabilities\ScreenshotCapability.cs" />
     <Compile Include="Coordinates\UwpCoordinateResolver.cs" />
@@ -164,6 +169,30 @@
     <Compile Include="..\Rover.Core\Tools\InputInjection\InjectDragPathResponse.cs" Link="Linked\Rover.Core\Tools\InjectDragPathResponse.cs" />
     <Compile Include="..\Rover.Core\Tools\InputInjection\InjectTapRequest.cs" Link="Linked\Rover.Core\Tools\InjectTapRequest.cs" />
     <Compile Include="..\Rover.Core\Tools\InputInjection\InjectTapResponse.cs" Link="Linked\Rover.Core\Tools\InjectTapResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectKeyPressRequest.cs" Link="Linked\Rover.Core\Tools\InjectKeyPressRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectKeyPressResponse.cs" Link="Linked\Rover.Core\Tools\InjectKeyPressResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectTextRequest.cs" Link="Linked\Rover.Core\Tools\InjectTextRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectTextResponse.cs" Link="Linked\Rover.Core\Tools\InjectTextResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectMouseScrollRequest.cs" Link="Linked\Rover.Core\Tools\InjectMouseScrollRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectMouseScrollResponse.cs" Link="Linked\Rover.Core\Tools\InjectMouseScrollResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectMouseMoveRequest.cs" Link="Linked\Rover.Core\Tools\InjectMouseMoveRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectMouseMoveResponse.cs" Link="Linked\Rover.Core\Tools\InjectMouseMoveResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectMultiTouchRequest.cs" Link="Linked\Rover.Core\Tools\InjectMultiTouchRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectMultiTouchResponse.cs" Link="Linked\Rover.Core\Tools\InjectMultiTouchResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectPinchRequest.cs" Link="Linked\Rover.Core\Tools\InjectPinchRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectPinchResponse.cs" Link="Linked\Rover.Core\Tools\InjectPinchResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectRotateRequest.cs" Link="Linked\Rover.Core\Tools\InjectRotateRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectRotateResponse.cs" Link="Linked\Rover.Core\Tools\InjectRotateResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectPenTapRequest.cs" Link="Linked\Rover.Core\Tools\InjectPenTapRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectPenTapResponse.cs" Link="Linked\Rover.Core\Tools\InjectPenTapResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\PenStrokePoint.cs" Link="Linked\Rover.Core\Tools\PenStrokePoint.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectPenStrokeRequest.cs" Link="Linked\Rover.Core\Tools\InjectPenStrokeRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectPenStrokeResponse.cs" Link="Linked\Rover.Core\Tools\InjectPenStrokeResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectGamepadInputRequest.cs" Link="Linked\Rover.Core\Tools\InjectGamepadInputRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectGamepadInputResponse.cs" Link="Linked\Rover.Core\Tools\InjectGamepadInputResponse.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\GamepadFrame.cs" Link="Linked\Rover.Core\Tools\GamepadFrame.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectGamepadSequenceRequest.cs" Link="Linked\Rover.Core\Tools\InjectGamepadSequenceRequest.cs" />
+    <Compile Include="..\Rover.Core\Tools\InputInjection\InjectGamepadSequenceResponse.cs" Link="Linked\Rover.Core\Tools\InjectGamepadSequenceResponse.cs" />
     <Compile Include="..\Rover.Core\Tools\Screenshot\CaptureViewRequest.cs" Link="Linked\Rover.Core\Tools\CaptureViewRequest.cs" />
     <Compile Include="..\Rover.Core\Tools\Screenshot\CaptureViewResponse.cs" Link="Linked\Rover.Core\Tools\CaptureViewResponse.cs" />
     <Compile Include="..\Rover.Core\Tools\Screenshot\CaptureRegionRequest.cs" Link="Linked\Rover.Core\Tools\CaptureRegionRequest.cs" />

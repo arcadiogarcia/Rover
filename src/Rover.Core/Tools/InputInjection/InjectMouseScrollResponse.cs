@@ -7,57 +7,48 @@ using Rover.Core.Coordinates;
 
 namespace Rover.Core.Tools.InputInjection
 {
-    public class InjectTapResponse
+    public class InjectMouseScrollResponse
     {
-        #if !WINDOWS_UWP
+#if !WINDOWS_UWP
         [JsonPropertyName("success")]
 #endif
         [JsonProperty("success")]
         public bool Success { get; set; }
 
-        #if !WINDOWS_UWP
+#if !WINDOWS_UWP
         [JsonPropertyName("resolvedCoordinates")]
 #endif
         [JsonProperty("resolvedCoordinates")]
         public CoordinatePoint? ResolvedCoordinates { get; set; }
 
-        #if !WINDOWS_UWP
-        [JsonPropertyName("device")]
+#if !WINDOWS_UWP
+        [JsonPropertyName("deltaY")]
 #endif
-        [JsonProperty("device")]
-        public string Device { get; set; } = "touch";
+        [JsonProperty("deltaY")]
+        public int DeltaY { get; set; }
 
-        #if !WINDOWS_UWP
-        [JsonPropertyName("button")]
+#if !WINDOWS_UWP
+        [JsonPropertyName("deltaX")]
 #endif
-        [JsonProperty("button")]
-        public string Button { get; set; } = "left";
+        [JsonProperty("deltaX")]
+        public int DeltaX { get; set; }
 
-        #if !WINDOWS_UWP
-        [JsonPropertyName("clickCount")]
-#endif
-        [JsonProperty("clickCount")]
-        public int ClickCount { get; set; } = 1;
-
-        #if !WINDOWS_UWP
-        [JsonPropertyName("timestamp")]
-#endif
-        [JsonProperty("timestamp")]
-        public string Timestamp { get; set; } = DateTimeOffset.UtcNow.ToString("O");
-
-        #if !WINDOWS_UWP
+#if !WINDOWS_UWP
         [JsonPropertyName("previewScreenshotPath")]
 #endif
         [JsonProperty("previewScreenshotPath")]
         public string? PreviewScreenshotPath { get; set; }
 
-        #if !WINDOWS_UWP
+#if !WINDOWS_UWP
+        [JsonPropertyName("timestamp")]
+#endif
+        [JsonProperty("timestamp")]
+        public string Timestamp { get; set; } = DateTimeOffset.UtcNow.ToString("O");
+
+#if !WINDOWS_UWP
         [JsonPropertyName("dryRun")]
 #endif
         [JsonProperty("dryRun")]
         public bool DryRun { get; set; }
     }
 }
-
-
-

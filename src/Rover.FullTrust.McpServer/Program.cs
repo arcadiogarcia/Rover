@@ -183,6 +183,18 @@ class Program
                 continue;
             }
 
+            // New input injection tools: bring to foreground before proxying to UWP
+            if (capturedName.StartsWith("inject_"))
+            {
+                adapter.RegisterTool(tool.Name, tool.Description, tool.InputSchema, async argsJson =>
+                {
+                    win32Input.BringToForeground();
+                    await Task.Delay(100);
+                    return await backend.InvokeToolAsync(capturedName, argsJson);
+                });
+                continue;
+            }
+
             adapter.RegisterTool(tool.Name, tool.Description, tool.InputSchema, async argsJson =>
             {
                 return await backend.InvokeToolAsync(capturedName, argsJson);

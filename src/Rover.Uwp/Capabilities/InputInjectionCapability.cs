@@ -17,7 +17,7 @@ using Windows.UI.Xaml.Media;
 
 namespace Rover.Uwp.Capabilities
 {
-    public sealed class InputInjectionCapability : IDebugCapability
+    public sealed partial class InputInjectionCapability : IDebugCapability
     {
         private InputInjector? _injector;
         private ICoordinateResolver? _resolver;
@@ -131,6 +131,12 @@ namespace Rover.Uwp.Capabilities
                 "Use capture_current_view first to see the UI layout.",
                 DragSchema,
                 InjectDragPathAsync);
+
+            RegisterKeyboardTools(registry);
+            RegisterMouseTools(registry);
+            RegisterTouchTools(registry);
+            RegisterPenTools(registry);
+            RegisterGamepadTools(registry);
         }
 
         private async Task<string> InjectTapAsync(string argsJson)
@@ -834,6 +840,70 @@ namespace Rover.Uwp.Capabilities
                 annotated, ScreenshotAnnotator.DefaultMaxDimension, ScreenshotAnnotator.DefaultMaxDimension).ConfigureAwait(false);
 
             var file = await ScreenshotAnnotator.SaveScreenshotAsync(annotated, "drag_preview").ConfigureAwait(false);
+            return file.Path;
+        }
+
+        /// <summary>
+        /// Captures a screenshot and draws multiple pointer path visualizations.
+        /// Used for multi-touch, pinch, and rotate previews.
+        /// Returns the saved file path, or null on failure.
+        /// </summary>
+        private async Task<string?> CaptureAnnotatedMultiPathPreview(
+            List<List<CoordinatePoint>> pointerPaths, string? coordinateSpace, string filePrefix)
+        {
+            Windows.Graphics.Imaging.SoftwareBitmap? bitmap = null;
+            var normalizedPaths = new List<List<(double x, double y)>>();
+
+            await _runOnUiThread!(async () =>
+            {
+                bitmap = await ScreenshotAnnotator.CaptureUiAsBitmapAsync().ConfigureAwait(false);
+
+                var space = ParseSpace(coordinateSpace);
+                foreach (var path in pointerPaths)
+                {
+                    var nPath = new List<(double x, double y)>();
+                    foreach (var pt in path)
+                    {
+                        double nx = pt.X;
+                        double ny = pt.Y;
+                        if (space == CoordinateSpace.Client || space == CoordinateSpace.Absolute)
+                        {
+                            var bounds = Window.Current.Bounds;
+                            if (space == CoordinateSpace.Client)
+                            {
+                                nx = pt.X / bounds.Width;
+                                ny = pt.Y / bounds.Height;
+                            }
+                            else
+                            {
+                                nx = (pt.X - bounds.X) / bounds.Width;
+                                ny = (pt.Y - bounds.Y) / bounds.Height;
+                            }
+                        }
+                        nPath.Add((nx, ny));
+                    }
+                    normalizedPaths.Add(nPath);
+                }
+            }).ConfigureAwait(false);
+
+            if (bitmap == null || normalizedPaths.Count == 0) return null;
+
+            int w = bitmap.PixelWidth;
+            int h = bitmap.PixelHeight;
+            var pixelPaths = new List<List<(int x, int y)>>();
+            foreach (var nPath in normalizedPaths)
+            {
+                var pxPath = new List<(int x, int y)>();
+                foreach (var (nx, ny) in nPath)
+                    pxPath.Add(((int)(nx * w), (int)(ny * h)));
+                pixelPaths.Add(pxPath);
+            }
+
+            var annotated = ScreenshotAnnotator.DrawMultiPointerPaths(bitmap, pixelPaths);
+            annotated = await ScreenshotAnnotator.ResizeBitmapAsync(
+                annotated, ScreenshotAnnotator.DefaultMaxDimension, ScreenshotAnnotator.DefaultMaxDimension).ConfigureAwait(false);
+
+            var file = await ScreenshotAnnotator.SaveScreenshotAsync(annotated, filePrefix).ConfigureAwait(false);
             return file.Path;
         }
 

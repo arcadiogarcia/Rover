@@ -217,6 +217,129 @@ namespace Rover.Uwp.Capabilities
 
         #endregion
 
+        #region Annotation — Multi-pointer paths
+
+        /// <summary>
+        /// Draws multiple pointer paths on the bitmap, each in a distinct color.
+        /// Used for multi-touch, pinch, and rotate preview annotations.
+        /// Each path gets a colored line, green-tinted start circle, and red-tinted end diamond.
+        /// </summary>
+        public static SoftwareBitmap DrawMultiPointerPaths(SoftwareBitmap source, List<List<(int x, int y)>> pointerPaths)
+        {
+            if (pointerPaths == null || pointerPaths.Count == 0) return source;
+
+            var bgra = SoftwareBitmap.Convert(source, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+            int w = bgra.PixelWidth;
+            int h = bgra.PixelHeight;
+            var pixels = new byte[4 * w * h];
+            bgra.CopyToBuffer(pixels.AsBuffer());
+
+            byte[] black = { 0, 0, 0, 255 };
+
+            // Per-pointer color palette (BGRA premultiplied)
+            byte[][] pathColors = {
+                new byte[]{ 255, 255, 0, 255 },   // cyan
+                new byte[]{ 255, 0, 255, 255 },   // magenta
+                new byte[]{ 0, 255, 255, 255 },   // yellow
+                new byte[]{ 0, 255, 0, 255 },     // green
+                new byte[]{ 0, 165, 255, 255 },   // orange
+            };
+            byte[][] startColors = {
+                new byte[]{ 0, 200, 0, 255 },     // green
+                new byte[]{ 200, 0, 0, 255 },     // blue
+                new byte[]{ 0, 200, 200, 255 },   // dark yellow
+                new byte[]{ 0, 128, 0, 255 },     // dark green
+                new byte[]{ 128, 128, 0, 255 },   // teal
+            };
+            byte[][] endColors = {
+                new byte[]{ 0, 0, 255, 255 },     // red
+                new byte[]{ 0, 128, 255, 255 },   // orange
+                new byte[]{ 0, 0, 200, 255 },     // dark red
+                new byte[]{ 128, 0, 128, 255 },   // purple
+                new byte[]{ 0, 0, 128, 255 },     // dark red
+            };
+
+            void SetPixel(int px, int py, byte[] color)
+            {
+                if (px < 0 || px >= w || py < 0 || py >= h) return;
+                int idx = (py * w + px) * 4;
+                pixels[idx] = color[0];
+                pixels[idx + 1] = color[1];
+                pixels[idx + 2] = color[2];
+                pixels[idx + 3] = color[3];
+            }
+
+            void DrawThickLine(int x0, int y0, int x1, int y1, int thickness, byte[] color)
+            {
+                int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+                int dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+                int err = dx + dy;
+                int half = thickness / 2;
+                while (true)
+                {
+                    for (int tx = -half; tx <= half; tx++)
+                        for (int ty = -half; ty <= half; ty++)
+                            SetPixel(x0 + tx, y0 + ty, color);
+                    if (x0 == x1 && y0 == y1) break;
+                    int e2 = 2 * err;
+                    if (e2 >= dy) { err += dy; x0 += sx; }
+                    if (e2 <= dx) { err += dx; y0 += sy; }
+                }
+            }
+
+            void FillCircle(int cx, int cy, int radius, byte[] color)
+            {
+                for (int dy = -radius; dy <= radius; dy++)
+                    for (int dx = -radius; dx <= radius; dx++)
+                        if (dx * dx + dy * dy <= radius * radius)
+                            SetPixel(cx + dx, cy + dy, color);
+            }
+
+            void FillDiamond(int cx, int cy, int size, byte[] color)
+            {
+                for (int dy = -size; dy <= size; dy++)
+                    for (int dx = -size; dx <= size; dx++)
+                        if (Math.Abs(dx) + Math.Abs(dy) <= size)
+                            SetPixel(cx + dx, cy + dy, color);
+            }
+
+            for (int p = 0; p < pointerPaths.Count; p++)
+            {
+                var path = pointerPaths[p];
+                if (path == null || path.Count < 1) continue;
+
+                int ci = p % pathColors.Length;
+                var lineColor = pathColors[ci];
+                var startColor = startColors[ci];
+                var endColor = endColors[ci];
+
+                // Draw path lines — black outline then colored center
+                if (path.Count >= 2)
+                {
+                    for (int i = 0; i < path.Count - 1; i++)
+                        DrawThickLine(path[i].x, path[i].y, path[i + 1].x, path[i + 1].y, 7, black);
+                    for (int i = 0; i < path.Count - 1; i++)
+                        DrawThickLine(path[i].x, path[i].y, path[i + 1].x, path[i + 1].y, 3, lineColor);
+                }
+
+                // Start circle
+                var start = path[0];
+                FillCircle(start.x, start.y, 12, black);
+                FillCircle(start.x, start.y, 9, startColor);
+
+                // End diamond
+                var end = path[path.Count - 1];
+                FillDiamond(end.x, end.y, 14, black);
+                FillDiamond(end.x, end.y, 11, endColor);
+            }
+
+            var result = new SoftwareBitmap(BitmapPixelFormat.Bgra8, w, h, BitmapAlphaMode.Premultiplied);
+            result.CopyFromBuffer(pixels.AsBuffer());
+            return result;
+        }
+
+        #endregion
+
         #region Image processing
 
         /// <summary>

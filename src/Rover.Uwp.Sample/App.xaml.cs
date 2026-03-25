@@ -90,6 +90,14 @@ namespace Rover.Uwp.Sample
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[Rover.Sample] Startup error: {ex.Message}");
+                try
+                {
+                    var path = System.IO.Path.Combine(
+                        Windows.Storage.ApplicationData.Current.LocalFolder.Path, "startup-error.log");
+                    System.IO.File.WriteAllText(path,
+                        $"{DateTimeOffset.Now:o} STARTUP ERROR:\r\n{ex}\r\n");
+                }
+                catch { }
             }
 #endif
         }
