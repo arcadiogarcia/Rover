@@ -54,10 +54,12 @@ namespace Rover.Uwp.Sample
                 await Rover.Uwp.RoverMcp.StartAsync("Rover.Uwp.Sample", port: 5100,
                     launchFullTrust: () => FullTrustProcessLauncher.LaunchFullTrustProcessForCurrentAppAsync("McpServer").AsTask(),
                     actionableApp: actionableApp);
+                Rover.Uwp.RoverMcp.Log("App", $"Rover MCP started — port 5100, launch kind: {e.Kind}");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[Rover.Sample] Startup error: {ex.Message}");
+                Rover.Uwp.RoverMcp.LogError("App", "Rover MCP startup failed", ex);
             }
 #endif
         }

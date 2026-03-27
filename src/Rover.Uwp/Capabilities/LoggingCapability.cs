@@ -71,27 +71,28 @@ namespace Rover.Uwp.Capabilities
         {
             try
             {
-                var args = System.Text.Json.JsonDocument.Parse(
-                    string.IsNullOrWhiteSpace(argsJson) ? "{}" : argsJson).RootElement;
+                var args = Newtonsoft.Json.Linq.JObject.Parse(
+                    string.IsNullOrWhiteSpace(argsJson) ? "{}" : argsJson);
 
                 var minimumLevel = RoverLogLevel.Info;
-                if (args.TryGetProperty("minimumLevel", out var levelEl))
-                {
-                    var levelStr = levelEl.GetString() ?? "info";
-                    minimumLevel = ParseLevel(levelStr);
-                }
+                var levelToken = args["minimumLevel"];
+                if (levelToken != null)
+                    minimumLevel = ParseLevel(levelToken.ToString());
 
                 var maxEntries = 100;
-                if (args.TryGetProperty("maxEntries", out var maxEl) && maxEl.TryGetInt32(out var m) && m > 0)
-                    maxEntries = m;
+                var maxToken = args["maxEntries"];
+                if (maxToken != null)
+                {
+                    var m = (int)maxToken;
+                    if (m > 0) maxEntries = m;
+                }
 
-                string? categoryFilter = null;
-                if (args.TryGetProperty("category", out var catEl))
-                    categoryFilter = catEl.GetString();
+                string? categoryFilter = args["category"]?.ToString();
 
                 var shouldClear = false;
-                if (args.TryGetProperty("clear", out var clearEl))
-                    shouldClear = clearEl.GetBoolean();
+                var clearToken = args["clear"];
+                if (clearToken != null)
+                    shouldClear = (bool)clearToken;
 
                 var store = _store ?? RoverLog.Store;
                 var snapshot = store.GetSnapshot(minimumLevel, maxEntries);
