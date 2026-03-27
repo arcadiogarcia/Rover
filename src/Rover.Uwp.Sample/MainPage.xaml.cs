@@ -36,6 +36,8 @@ namespace Rover.Uwp.Sample
             GreenSlider.ValueChanged += Slider_ValueChanged;
             BlueSlider.ValueChanged += Slider_ValueChanged;
 
+            Rover.Uwp.RoverMcp.Log("MainPage", "MainPage initialized");
+
             // Track text changes for char count
             TestTextBox.TextChanged += TextBox_TextChanged;
             MultiLineTextBox.TextChanged += TextBox_TextChanged;
@@ -71,6 +73,7 @@ namespace Rover.Uwp.Sample
                 byte g = Convert.ToByte(hex.Substring(2, 2), 16);
                 byte b = Convert.ToByte(hex.Substring(4, 2), 16);
 
+                Rover.Uwp.RoverMcp.Log("MainPage.ColorPicker", $"Preset color clicked: #{hex} (R={r}, G={g}, B={b})");
                 RedSlider.Value = r;
                 GreenSlider.Value = g;
                 BlueSlider.Value = b;
@@ -96,6 +99,8 @@ namespace Rover.Uwp.Sample
             RedValue.Text = r.ToString();
             GreenValue.Text = g.ToString();
             BlueValue.Text = b.ToString();
+
+            Rover.Uwp.RoverMcp.Log("MainPage.ColorPicker", $"Color updated: #{r:X2}{g:X2}{b:X2} (R={r}, G={g}, B={b})");
         }
 
         #endregion
@@ -110,6 +115,7 @@ namespace Rover.Uwp.Sample
 
         private void ClearText_Click(object sender, RoutedEventArgs e)
         {
+            Rover.Uwp.RoverMcp.Log("MainPage.TextInput", "Text cleared by user");
             TestTextBox.Text = "";
             MultiLineTextBox.Text = "";
         }
@@ -120,6 +126,8 @@ namespace Rover.Uwp.Sample
 
         private void ClearInk_Click(object sender, RoutedEventArgs e)
         {
+            int before = TestInkCanvas.InkPresenter.StrokeContainer.GetStrokes().Count;
+            Rover.Uwp.RoverMcp.Log("MainPage.InkCanvas", $"Ink cleared ({before} strokes removed)");
             TestInkCanvas.InkPresenter.StrokeContainer.Clear();
             StrokeCountLabel.Text = "Strokes: 0";
         }
@@ -129,6 +137,7 @@ namespace Rover.Uwp.Sample
             if (sender is Button btn && btn.Tag is string mode)
             {
                 var attrs = TestInkCanvas.InkPresenter.CopyDefaultDrawingAttributes();
+                Rover.Uwp.RoverMcp.Log("MainPage.InkCanvas", $"Ink mode changed to: {mode}");
                 switch (mode)
                 {
                     case "pen":
@@ -154,11 +163,15 @@ namespace Rover.Uwp.Sample
         private void InkPresenter_StrokesCollected(InkPresenter sender, InkStrokesCollectedEventArgs args)
         {
             UpdateStrokeCount();
+            Rover.Uwp.RoverMcp.Log("MainPage.InkCanvas",
+                $"{args.Strokes.Count} stroke(s) collected — total: {TestInkCanvas.InkPresenter.StrokeContainer.GetStrokes().Count}");
         }
 
         private void InkPresenter_StrokesErased(InkPresenter sender, InkStrokesErasedEventArgs args)
         {
             UpdateStrokeCount();
+            Rover.Uwp.RoverMcp.Log("MainPage.InkCanvas",
+                $"{args.Strokes.Count} stroke(s) erased — total remaining: {TestInkCanvas.InkPresenter.StrokeContainer.GetStrokes().Count}");
         }
 
         private void UpdateStrokeCount()
@@ -232,22 +245,30 @@ namespace Rover.Uwp.Sample
 
         public async Task<ActionResult> DispatchAsync(string actionName, string parametersJson)
         {
+            Rover.Uwp.RoverMcp.Log("MainPage.Actions", $"Dispatching action: {actionName} params={parametersJson}");
             try
             {
+                ActionResult result;
                 switch (actionName)
                 {
                     case "SetPresetColor":
-                        return await DispatchSetPresetColorAsync(parametersJson);
+                        result = await DispatchSetPresetColorAsync(parametersJson); break;
                     case "SetColorChannel":
-                        return await DispatchSetColorChannelAsync(parametersJson);
+                        result = await DispatchSetColorChannelAsync(parametersJson); break;
                     case "SwitchTab":
-                        return await DispatchSwitchTabAsync(parametersJson);
+                        result = await DispatchSwitchTabAsync(parametersJson); break;
                     default:
-                        return ActionResult.Fail("unknown_action", $"No action named '{actionName}' is registered.");
+                        result = ActionResult.Fail("unknown_action", $"No action named '{actionName}' is registered."); break;
                 }
+                if (result.Success)
+                    Rover.Uwp.RoverMcp.Log("MainPage.Actions", $"Action '{actionName}' succeeded");
+                else
+                    Rover.Uwp.RoverMcp.LogWarn("MainPage.Actions", $"Action '{actionName}' failed: {result.ErrorMessage}");
+                return result;
             }
             catch (Exception ex)
             {
+                Rover.Uwp.RoverMcp.LogError("MainPage.Actions", $"Action '{actionName}' threw an exception", ex);
                 return ActionResult.Fail("execution_error", ex.Message);
             }
         }
