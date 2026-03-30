@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
@@ -9,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using zRover.Core;
+using zRover.Core.Sessions;
 using zRover.Mcp;
 using Windows.ApplicationModel.AppService;
 using Windows.Foundation.Collections;
@@ -30,18 +34,24 @@ class Program
 
         Console.Error.WriteLine("[McpServer] Starting zRover FullTrust MCP Server...");
 
-        // Default mode: HTTP on port 5100 (can be overridden with --port)
-        var port = 5100;
-        var portIdx = Array.IndexOf(args, "--port");
-        if (portIdx >= 0 && portIdx + 1 < args.Length && int.TryParse(args[portIdx + 1], out var p))
-            port = p;
+        var useStdio   = args.Contains("--stdio");
+        string? instanceId = ArgValue(args, "--instance-id");
+        string  appVersion = ArgValue(args, "--app-version") ?? "1.0";
 
-        var useStdio = args.Contains("--stdio");
-
-        // Connect to the UWP AppService (retries built in)
+        // Connect to the UWP AppService first — all other config comes from there.
         var backend = new AppServiceToolBackend();
         await backend.ConnectAsync();
         Console.Error.WriteLine("[McpServer] Connected to UWP AppService");
+
+        // Ask the UWP host for port + manager URL + app name via the AppService channel.
+        // CLI args act as explicit overrides (useful for dev/standalone testing).
+        var (configPort, configAppName, configManagerUrl) = await backend.GetConfigAsync();
+        var port       = ArgValue(args, "--port") is { } portStr && int.TryParse(portStr, out var argPort)
+                             ? argPort : configPort;
+        var appName    = ArgValue(args, "--app-name") ?? configAppName;
+        var managerUrl = ArgValue(args, "--manager-url") ?? configManagerUrl;
+
+        Console.Error.WriteLine($"[McpServer] Config — port={port}, app={appName}, manager={managerUrl ?? "(none)"}");
 
         // Discover tools from the UWP app upfront
         var adapter = new McpToolRegistryAdapter();
@@ -67,6 +77,22 @@ class Program
             });
         }
 
+        // Register with the BackgroundManager if a manager URL was provided.
+        // Do this after the MCP server is about to start so the manager can connect back immediately.
+        if (managerUrl != null)
+        {
+            var mcpUrl  = $"http://localhost:{port}/mcp";
+            var request = new SessionRegistrationRequest
+            {
+                AppName    = appName,
+                Version    = appVersion,
+                InstanceId = instanceId,
+                McpUrl     = mcpUrl
+            };
+
+            _ = Task.Run(() => RegisterWithManagerAsync(managerUrl, request, backend.ShutdownToken));
+        }
+
         if (useStdio)
         {
             Console.Error.WriteLine("[McpServer] Running in stdio mode");
@@ -80,6 +106,57 @@ class Program
 
         Console.Error.WriteLine("[McpServer] MCP server shutting down");
         backend.Dispose();
+    }
+
+    /// <summary>
+    /// Reads the value following a named flag from the args array.
+    /// Returns null if the flag is absent or has no value.
+    /// </summary>
+    private static string? ArgValue(string[] args, string flag)
+    {
+        var idx = Array.IndexOf(args, flag);
+        return idx >= 0 && idx + 1 < args.Length ? args[idx + 1] : null;
+    }
+
+    /// <summary>
+    /// POSTs registration to the BackgroundManager with exponential backoff.
+    /// Runs fire-and-forget so it doesn't block the MCP server startup.
+    /// </summary>
+    private static async Task RegisterWithManagerAsync(
+        string managerUrl,
+        SessionRegistrationRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        var url  = managerUrl.TrimEnd('/') + "/sessions/register";
+        var body = JsonSerializer.Serialize(request);
+
+        const int maxAttempts = 8;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                var content  = new StringContent(body, Encoding.UTF8, "application/json");
+                var response = await http.PostAsync(url, content, cancellationToken);
+                response.EnsureSuccessStatusCode();
+
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                Console.Error.WriteLine($"[McpServer] Registered with BackgroundManager. Response: {responseBody}");
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[McpServer] Manager registration attempt {attempt}/{maxAttempts} failed: {ex.Message}");
+                if (attempt < maxAttempts)
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Min(2 * attempt, 30)), cancellationToken);
+            }
+        }
+
+        Console.Error.WriteLine("[McpServer] Could not register with BackgroundManager after all attempts.");
     }
 }
 
@@ -258,6 +335,22 @@ internal sealed class AppServiceToolBackend : IToolBackend, IDisposable
 
         Log("Failed to connect to AppService after all retries");
         throw new Exception($"Failed to connect to AppService after {maxRetries} attempts");
+    }
+
+    public async Task<(int Port, string AppName, string? ManagerUrl)> GetConfigAsync()
+    {
+        var request = new ValueSet { { "command", "get_config" } };
+        var response = await _connection!.SendMessageAsync(request);
+
+        if (response.Status != AppServiceResponseStatus.Success)
+            throw new Exception($"get_config failed: {response.Status}");
+
+        var portStr    = response.Message.TryGetValue("port",       out var p) ? p as string : null;
+        var appName    = response.Message.TryGetValue("appName",    out var a) ? a as string : null;
+        var managerUrl = response.Message.TryGetValue("managerUrl", out var m) ? m as string : null;
+
+        int port = int.TryParse(portStr, out var parsed) ? parsed : RoverPorts.App;
+        return (port, appName ?? "UnknownApp", string.IsNullOrEmpty(managerUrl) ? null : managerUrl);
     }
 
     public async Task<IReadOnlyList<DiscoveredTool>> ListToolsAsync()

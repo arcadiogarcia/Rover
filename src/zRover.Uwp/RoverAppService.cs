@@ -103,6 +103,13 @@ namespace zRover.Uwp
                     response["windowClosed"] = WindowClosed;
                     break;
 
+                case "get_config":
+                    response["status"]     = "success";
+                    response["port"]       = DebugHost.CurrentPort.ToString();
+                    response["appName"]    = DebugHost.CurrentAppName;
+                    response["managerUrl"] = DebugHost.CurrentManagerUrl ?? "";
+                    break;
+
                 case "list_tools":
                     var registry = AppService.ToolRegistry.Instance;
                     var allTools = registry.GetAllTools();
