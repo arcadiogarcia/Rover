@@ -36,10 +36,11 @@ namespace zRover.Uwp.Sample
 
 #if DEBUG
             var actionableApp = rootFrame.Content as zRover.Core.IActionableApp;
-            await zRover.Uwp.RoverMcp.StartAsync("zRover.Uwp.Sample", port: 5100,
+            await zRover.Uwp.RoverMcp.StartAsync("zRover.Uwp.Sample",
                 launchFullTrust: () => FullTrustProcessLauncher.LaunchFullTrustProcessForCurrentAppAsync("McpServer").AsTask(),
-                actionableApp: actionableApp);
-            zRover.Uwp.RoverMcp.Log("App", $"zRover MCP started — port 5100, launch kind: {e.Kind}");
+                actionableApp: actionableApp,
+                managerUrl: "http://localhost:5200");
+            zRover.Uwp.RoverMcp.Log("App", $"zRover MCP started — auto port, launch kind: {e.Kind}");
 #endif
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using zRover.Core;
 using zRover.Core.Logging;
 using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Background;
@@ -15,7 +16,7 @@ namespace zRover.Uwp
     /// Minimal integration (3 touch-points in App.xaml.cs):
     /// <code>
     /// // 1. In OnLaunched, after Window.Current.Activate():
-    /// await RoverMcp.StartAsync("MyApp", port: 5100,
+    /// await RoverMcp.StartAsync("MyApp",
     ///     () => FullTrustProcessLauncher.LaunchFullTrustProcessForCurrentAppAsync("McpServer").AsTask());
     ///
     /// // 2. Override OnBackgroundActivated:
@@ -38,23 +39,30 @@ namespace zRover.Uwp
         /// Call once from <c>OnLaunched</c> after <c>Window.Current.Activate()</c>.
         /// </summary>
         /// <param name="appName">Display name for the MCP server.</param>
-        /// <param name="port">TCP port the MCP server listens on (default 5100).</param>
+        /// <param name="port">
+        /// TCP port the MCP server listens on.
+        /// Default is <c>5100</c> — the well-known zRover per-app port, so the first running
+        /// instance is always reachable at a predictable address.
+        /// Pass <c>0</c> to let the OS pick a free port automatically (useful when running
+        /// multiple app instances simultaneously).
+        /// </param>
         /// <param name="launchFullTrust">
         /// Callback that launches the FullTrust companion process.
         /// Typically: <c>() => FullTrustProcessLauncher.LaunchFullTrustProcessForCurrentAppAsync("McpServer").AsTask()</c>
         /// </param>
         public static async Task StartAsync(
             string appName,
-            int port = 5100,
+            int port = RoverPorts.App,
             Func<Task>? launchFullTrust = null,
-            zRover.Core.IActionableApp? actionableApp = null)
+            zRover.Core.IActionableApp? actionableApp = null,
+            string? managerUrl = null)
         {
             // Wire window-close signal so FullTrust process shuts down
             if (Window.Current != null)
                 Window.Current.Closed += (s, a) => RoverAppService.WindowClosed = true;
 
             // Register capabilities + tools
-            await DebugHost.StartAsync(appName, port: port, actionableApp: actionableApp);
+            await DebugHost.StartAsync(appName, port: port, actionableApp: actionableApp, managerUrl: managerUrl);
 
             // Launch the FullTrust MCP companion process
             if (launchFullTrust != null)

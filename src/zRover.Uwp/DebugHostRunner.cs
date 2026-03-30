@@ -114,6 +114,10 @@ namespace zRover.Uwp
             RoverLog.Info("zRover.Host", $"Registered {registry.Tools.Count} tools with AppService ToolRegistry");
             System.Diagnostics.Debug.WriteLine($"[zRover] Registered {registry.Tools.Count} tools with AppService ToolRegistry");
 
+            // Port is resolved by DebugHost.StartAsync before the runner is created.
+            // No file-based IPC needed — FullTrust gets port + manager URL via get_config
+            // over the existing AppService channel after it connects.
+
             // Launch FullTrust MCP server process (if callback provided)
             if (_launchFullTrustProcess != null)
             {
