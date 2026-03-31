@@ -1,7 +1,6 @@
-# deploy-dev.ps1
+﻿# deploy-dev.ps1
 # Registers zRover.BackgroundManager as a loose-file MSIX package for development.
-# Run once after each machine setup — VS F5 can then just launch the already-registered exe.
-# Requires: Developer Mode enabled (Settings → Privacy & Security → For developers)
+# Requires: Developer Mode enabled (Settings > Privacy & Security > For developers)
 #
 # Usage:
 #   .\deploy-dev.ps1              # x64 Debug (default)
@@ -9,37 +8,62 @@
 #   .\deploy-dev.ps1 -Config Release
 
 param(
-    [ValidateSet("x64","x86","arm64")]
-    [string] $Arch   = "x64",
-    [ValidateSet("Debug","Release")]
-    [string] $Config = "Debug"
+    [ValidateSet('x64','x86','arm64')]
+    [string] $Arch   = 'x64',
+    [ValidateSet('Debug','Release')]
+    [string] $Config = 'Debug'
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
 $ProjectDir = $PSScriptRoot
-$ProjectFile = Join-Path $ProjectDir "zRover.BackgroundManager.csproj"
+$ProjectFile = Join-Path $ProjectDir 'zRover.BackgroundManager.csproj'
 $Rid = "win-$Arch"
 
 # 1. Publish to a stable layout folder
 $LayoutDir = Join-Path $ProjectDir "bin\Deploy\$Config-$Arch"
-Write-Host "Building ($Config|$Arch) → $LayoutDir"
+Write-Host "Building ($Config|$Arch) -> $LayoutDir"
 dotnet publish $ProjectFile -c $Config -r $Rid --no-self-contained -o $LayoutDir
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
+if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 
-# 2. Copy AppxManifest (the Register call expects the name "AppxManifest.xml")
-$ManifestSrc = Join-Path $ProjectDir "Package.appxmanifest"
-$ManifestDst = Join-Path $LayoutDir "AppxManifest.xml"
+# 1b. Copy WinUI build artifacts that dotnet publish does not include (.pri, .xbf)
+$BuildDir = Join-Path $ProjectDir "bin\$Config\net9.0-windows10.0.19041.0"
+$PriSrc = Join-Path $BuildDir 'zRover.BackgroundManager.pri'
+if (-not (Test-Path $PriSrc)) {
+    Write-Host 'Building to generate WinUI artifacts...'
+    dotnet build $ProjectFile -c $Config -r $Rid --no-self-contained --no-restore
+    if ($LASTEXITCODE -ne 0) { throw 'dotnet build failed' }
+}
+if (Test-Path $PriSrc) {
+    Copy-Item $PriSrc (Join-Path $LayoutDir 'resources.pri') -Force
+    Write-Host 'Copied resources.pri'
+} else {
+    Write-Warning 'resources.pri not found -- WinUI may fail to start'
+}
+# Copy compiled XAML binaries (.xbf)
+Get-ChildItem $BuildDir -Filter '*.xbf' -ErrorAction SilentlyContinue | ForEach-Object {
+    Copy-Item $_.FullName (Join-Path $LayoutDir $_.Name) -Force
+    Write-Host "Copied $($_.Name)"
+}
+
+# 2. Copy AppxManifest
+$ManifestSrc = Join-Path $ProjectDir 'Package.appxmanifest'
+$ManifestDst = Join-Path $LayoutDir 'AppxManifest.xml'
 Copy-Item $ManifestSrc $ManifestDst -Force
 
+# Patch ProcessorArchitecture to match the target RID
+$content = Get-Content $ManifestDst -Raw
+$content = $content -replace 'ProcessorArchitecture="[^"]*"', ('ProcessorArchitecture="' + $Arch + '"')
+Set-Content $ManifestDst -Value $content -Encoding UTF8
+
 # 3. Copy Assets folder
-$AssetsSrc = Join-Path $ProjectDir "Assets"
-$AssetsDst = Join-Path $LayoutDir "Assets"
+$AssetsSrc = Join-Path $ProjectDir 'Assets'
+$AssetsDst = Join-Path $LayoutDir 'Assets'
 if (Test-Path $AssetsSrc) {
     Copy-Item $AssetsSrc $AssetsDst -Recurse -Force
 }
 
 # 4. Remove any previously registered version of this package
-$existing = Get-AppxPackage | Where-Object { $_.Name -eq "zRover.BackgroundManager" }
+$existing = Get-AppxPackage | Where-Object { $_.Name -eq 'zRover.BackgroundManager' }
 if ($existing) {
     Write-Host "Removing previous registration: $($existing.PackageFullName)"
     Remove-AppxPackage $existing.PackageFullName
@@ -49,9 +73,9 @@ if ($existing) {
 Write-Host "Registering package from $ManifestDst"
 Add-AppxPackage -Register $ManifestDst -ForceApplicationShutdown
 
-Write-Host ""
-Write-Host "Done. Package registered:"
-Get-AppxPackage | Where-Object { $_.Name -eq "zRover.BackgroundManager" } |
+Write-Host ''
+Write-Host 'Done. Package registered:'
+Get-AppxPackage | Where-Object { $_.Name -eq 'zRover.BackgroundManager' } |
     Select-Object Name, Version, PackageFullName | Format-List
 
-Write-Host "Startup task will appear in Task Manager → Startup apps after next login."
+Write-Host 'Startup task will appear in Task Manager > Startup apps after next login.'

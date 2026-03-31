@@ -24,6 +24,7 @@ public sealed class SessionRegistry : ISessionRegistry
     }
 
     public event EventHandler<ActiveSessionChangedEventArgs>? ActiveSessionChanged;
+    public event EventHandler? SessionsChanged;
 
     public void Add(IRoverSession session)
     {
@@ -31,6 +32,16 @@ public sealed class SessionRegistry : ISessionRegistry
             _sessions.Add(session);
 
         session.Disconnected += OnSessionDisconnected;
+
+        // Guard: if the session disconnected before we attached the handler,
+        // clean up immediately so it does not linger in the list.
+        if (!session.IsConnected)
+        {
+            Remove(session.SessionId);
+            return;
+        }
+
+        SessionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public bool Remove(string sessionId)
@@ -53,6 +64,7 @@ public sealed class SessionRegistry : ISessionRegistry
         }
 
         removed.Disconnected -= OnSessionDisconnected;
+        SessionsChanged?.Invoke(this, EventArgs.Empty);
 
         if (prevActive != null)
             ActiveSessionChanged?.Invoke(this, new ActiveSessionChangedEventArgs(prevActive, null));
