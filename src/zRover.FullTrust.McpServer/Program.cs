@@ -156,7 +156,7 @@ class Program
             }
         }
 
-        Console.Error.WriteLine("[McpServer] Could not register with BackgroundManager after all attempts.");
+        Console.Error.WriteLine("[McpServer] Could not reach BackgroundManager after all attempts — running standalone.");
     }
 }
 

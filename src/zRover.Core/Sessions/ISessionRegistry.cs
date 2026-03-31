@@ -41,6 +41,11 @@ namespace zRover.Core.Sessions
         /// disconnected.
         /// </summary>
         event EventHandler<ActiveSessionChangedEventArgs>? ActiveSessionChanged;
+
+        /// <summary>
+        /// Fired when a session is added or removed.
+        /// </summary>
+        event EventHandler? SessionsChanged;
     }
 
     public sealed class ActiveSessionChangedEventArgs : EventArgs

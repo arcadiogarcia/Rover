@@ -43,11 +43,12 @@ public sealed class McpClientSession : IRoverSession, IAsyncDisposable
     {
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
-            Endpoint = new Uri(mcpUrl)
+            Endpoint = new Uri(mcpUrl),
         });
 
         var client = await McpClient.CreateAsync(transport, cancellationToken: cancellationToken);
-        return new McpClientSession(sessionId, identity, mcpUrl, client);
+        var session = new McpClientSession(sessionId, identity, mcpUrl, client);
+        return session;
     }
 
     public async Task<IReadOnlyList<DiscoveredTool>> ListToolsAsync(CancellationToken cancellationToken = default)
@@ -95,7 +96,17 @@ public sealed class McpClientSession : IRoverSession, IAsyncDisposable
         }
     }
 
-    private void MarkDisconnected()
+    /// <summary>
+    /// Begin watching the MCP transport for completion. Call this AFTER
+    /// the <see cref="Disconnected"/> event handler has been attached so
+    /// the notification is never lost.
+    /// </summary>
+    internal void StartDisconnectMonitoring()
+    {
+        _ = _client.Completion.ContinueWith(_ => MarkDisconnected(), TaskScheduler.Default);
+    }
+
+    internal void MarkDisconnected()
     {
         if (_connected)
         {

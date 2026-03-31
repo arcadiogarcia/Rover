@@ -1,3 +1,5 @@
+using System.IO.Pipes;
+using Microsoft.UI.Dispatching;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using zRover.BackgroundManager;
@@ -6,78 +8,155 @@ using zRover.BackgroundManager.Sessions;
 using zRover.Core.Sessions;
 using zRover.Mcp;
 
-var builder = WebApplication.CreateBuilder(args);
+namespace zRover.BackgroundManager;
 
-// ── Core services ──────────────────────────────────────────────────────────
-builder.Services.AddSingleton<SessionRegistry>();
-builder.Services.AddSingleton<ISessionRegistry>(sp => sp.GetRequiredService<SessionRegistry>());
-builder.Services.AddSingleton<McpToolRegistryAdapter>();
-builder.Services.AddSingleton<ActiveSessionProxy>();
-builder.Services.AddHostedService<Worker>();
-
-// ── Master MCP server ──────────────────────────────────────────────────────
-builder.Services.AddMcpServer(options =>
+public class Program
 {
-    options.ServerInfo = new Implementation { Name = "zRover.Manager", Version = "1.0.0" };
-    options.Capabilities = new ServerCapabilities
+    private const string MutexName = "zRover.BackgroundManager.SingleInstance";
+    private const string PipeName  = "zRover.BackgroundManager.Activate";
+
+    [STAThread]
+    public static void Main(string[] args)
     {
-        Tools = new ToolsCapability { ListChanged = true }
-    };
-    // ToolCollection is wired after build via the adapter
-}).WithHttpTransport();
+        using var mutex = new Mutex(true, MutexName, out bool isFirst);
+        if (!isFirst)
+        {
+            // Another instance is running — ask it to show its window and exit.
+            try
+            {
+                using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
+                pipe.Connect(2000);
+                using var writer = new StreamWriter(pipe) { AutoFlush = true };
+                writer.WriteLine("activate");
+                pipe.WaitForPipeDrain();
+            }
+            catch { /* Best effort — the other instance will surface eventually. */ }
+            return;
+        }
 
-var app = builder.Build();
+        var builder = WebApplication.CreateBuilder(args);
 
-// ── Initialise management tools in the adapter ─────────────────────────────
-var adapter  = app.Services.GetRequiredService<McpToolRegistryAdapter>();
-var sessions = app.Services.GetRequiredService<ISessionRegistry>();
-SessionManagementTools.Register(adapter, sessions);
+        // ── Core services ──────────────────────────────────────────────────────────
+        builder.Services.AddSingleton<SessionRegistry>();
+        builder.Services.AddSingleton<ISessionRegistry>(sp => sp.GetRequiredService<SessionRegistry>());
+        builder.Services.AddSingleton<McpToolRegistryAdapter>();
+        builder.Services.AddSingleton<ActiveSessionProxy>();
+        builder.Services.AddHostedService<Worker>();
 
-// Patch the MCP server options to use the live tool collection
-// (done after build so DI is available)
-var mcpOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<McpServerOptions>>().Value;
-mcpOptions.ToolCollection = adapter.Tools;
+        // ── Master MCP server ──────────────────────────────────────────────────────
+        builder.Services.AddMcpServer(options =>
+        {
+            options.ServerInfo = new Implementation { Name = "zRover.Manager", Version = "1.0.0" };
+            options.Capabilities = new ServerCapabilities
+            {
+                Tools = new ToolsCapability { ListChanged = true }
+            };
+        }).WithHttpTransport();
 
-// ── Session registration endpoint ─────────────────────────────────────────
-// Per-app zRover.FullTrust.McpServer POSTs here when it starts:
-//   POST /sessions/register
-//   Body: { appName, version, instanceId?, mcpUrl }
-app.MapPost("/sessions/register", async (
-    SessionRegistrationRequest req,
-    SessionRegistry registry,
-    ActiveSessionProxy proxy,
-    ILogger<Program> log,
-    CancellationToken ct) =>
-{
-    if (string.IsNullOrWhiteSpace(req.AppName) || string.IsNullOrWhiteSpace(req.McpUrl))
-        return Results.BadRequest(new { error = "appName and mcpUrl are required" });
+        var webApp = builder.Build();
 
-    var sessionId = Guid.NewGuid().ToString("N")[..12];
-    var identity  = new RoverAppIdentity(req.AppName, req.Version, req.InstanceId);
+        // ── Initialise management tools in the adapter ─────────────────────────────
+        var adapter  = webApp.Services.GetRequiredService<McpToolRegistryAdapter>();
+        var sessions = webApp.Services.GetRequiredService<ISessionRegistry>();
+        SessionManagementTools.Register(adapter, sessions);
 
-    log.LogInformation("Session registering: {DisplayName} at {McpUrl}", identity.DisplayName, req.McpUrl);
+        var mcpOptions = webApp.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<McpServerOptions>>().Value;
+        mcpOptions.ToolCollection = adapter.Tools;
 
-    McpClientSession session;
-    try
-    {
-        session = await McpClientSession.ConnectAsync(sessionId, identity, req.McpUrl, ct);
+        // ── Session registration endpoint ─────────────────────────────────────────
+        webApp.MapPost("/sessions/register", async (
+            SessionRegistrationRequest req,
+            SessionRegistry registry,
+            ActiveSessionProxy proxy,
+            ILogger<Program> log,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.AppName) || string.IsNullOrWhiteSpace(req.McpUrl))
+                return Results.BadRequest(new { error = "appName and mcpUrl are required" });
+
+            var sessionId = Guid.NewGuid().ToString("N")[..12];
+            var identity  = new RoverAppIdentity(req.AppName, req.Version, req.InstanceId);
+
+            log.LogInformation("Session registering: {DisplayName} at {McpUrl}", identity.DisplayName, req.McpUrl);
+
+            McpClientSession session;
+            try
+            {
+                session = await McpClientSession.ConnectAsync(sessionId, identity, req.McpUrl, ct);
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Failed to connect MCP client to {McpUrl}", req.McpUrl);
+                return Results.Problem($"Could not connect to MCP server at {req.McpUrl}: {ex.Message}");
+            }
+
+            registry.Add(session);
+            session.StartDisconnectMonitoring();
+            log.LogInformation("Session registered: {SessionId} {DisplayName}", sessionId, identity.DisplayName);
+
+            await proxy.OnSessionRegisteredAsync(session);
+
+            return Results.Ok(new SessionRegistrationResponse { SessionId = sessionId });
+        });
+
+        webApp.MapMcp("/mcp");
+
+        // ── Launch web host on background thread, WinUI on main (STA) thread ────
+        _ = Task.Run(async () =>
+        {
+            await webApp.StartAsync();
+        });
+        Thread.Sleep(500);
+
+        App.Services = webApp.Services;
+
+        // Listen for activation requests from subsequent launches
+        _ = Task.Run(() => ListenForActivationAsync());
+
+        WinRT.ComWrappersSupport.InitializeComWrappers();
+
+        // Bootstrap the WindowsAppRuntime for unpackaged execution
+        bool isPackaged = false;
+        try { _ = Windows.ApplicationModel.Package.Current; isPackaged = true; }
+        catch { }
+
+        if (!isPackaged)
+        {
+            Microsoft.Windows.ApplicationModel.DynamicDependency.Bootstrap.Initialize(0x00010008);
+        }
+
+        Microsoft.UI.Xaml.Application.Start(_ =>
+        {
+            var context = new DispatcherQueueSynchronizationContext(
+                DispatcherQueue.GetForCurrentThread());
+            SynchronizationContext.SetSynchronizationContext(context);
+            new App();
+        });
+
+        if (!isPackaged)
+        {
+            Microsoft.Windows.ApplicationModel.DynamicDependency.Bootstrap.Shutdown();
+        }
+
+        // UI closed — keep the background service alive
+        webApp.WaitForShutdownAsync().GetAwaiter().GetResult();
     }
-    catch (Exception ex)
+
+    private static async Task ListenForActivationAsync()
     {
-        log.LogError(ex, "Failed to connect MCP client to {McpUrl}", req.McpUrl);
-        return Results.Problem($"Could not connect to MCP server at {req.McpUrl}: {ex.Message}");
+        while (true)
+        {
+            using var server = new NamedPipeServerStream(PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+            await server.WaitForConnectionAsync();
+            try
+            {
+                using var reader = new StreamReader(server);
+                var msg = await reader.ReadLineAsync();
+                if (msg == "activate")
+                    App.ActivateFromExternal();
+            }
+            catch { /* client disconnected */ }
+        }
     }
-
-    registry.Add(session);
-    log.LogInformation("Session registered: {SessionId} {DisplayName}", sessionId, identity.DisplayName);
-
-    // If this is the first session, initialise the proxy tool skeleton
-    await proxy.OnSessionRegisteredAsync(session);
-
-    return Results.Ok(new SessionRegistrationResponse { SessionId = sessionId });
-});
-
-app.MapMcp("/mcp");
-
-app.Run();
+}
 
