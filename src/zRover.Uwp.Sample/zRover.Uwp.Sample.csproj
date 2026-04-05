@@ -169,7 +169,15 @@
 
   <!-- ── FullTrust companion: paths ──────────────────────────────────── -->
   <PropertyGroup>
-    <FullTrustBuildDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\zRover.FullTrust.McpServer\bin\$(Configuration)\net8.0-windows10.0.19041.0\'))</FullTrustBuildDir>
+    <!-- Map UWP PlatformTarget to a dotnet RID so the FullTrust binary
+         always matches the architecture of the UWP host being built. -->
+    <_FullTrustRid Condition="'$(PlatformTarget)' == 'x64'">win-x64</_FullTrustRid>
+    <_FullTrustRid Condition="'$(PlatformTarget)' == 'x86'">win-x86</_FullTrustRid>
+    <_FullTrustRid Condition="'$(PlatformTarget)' == 'ARM64'">win-arm64</_FullTrustRid>
+    <_FullTrustRid Condition="'$(PlatformTarget)' == 'ARM'">win-arm</_FullTrustRid>
+    <!-- Fallback: use the host machine's RID if PlatformTarget is unrecognised -->
+    <_FullTrustRid Condition="'$(_FullTrustRid)' == ''">win-x64</_FullTrustRid>
+    <FullTrustBuildDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\zRover.FullTrust.McpServer\bin\$(Configuration)\net8.0-windows10.0.19041.0\$(_FullTrustRid)\'))</FullTrustBuildDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -196,7 +204,7 @@
   -->
   <Target Name="_BuildFullTrustProject" BeforeTargets="PrepareForBuild"
           Condition="'$(BuildingInsideVisualStudio)' != 'true' and '$(BuildingSolutionFile)' != 'true' and ('$(SolutionDir)' == '' or '$(SolutionDir)' == '*Undefined*')">
-    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\zRover.FullTrust.McpServer\zRover.FullTrust.McpServer.csproj&quot; -c $(Configuration) --no-self-contained" />
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\zRover.FullTrust.McpServer\zRover.FullTrust.McpServer.csproj&quot; -c $(Configuration) -r $(_FullTrustRid) --no-self-contained" />
   </Target>
 
   <!-- Copy FullTrust output into the AppX loose layout so F5 debugging works. -->
