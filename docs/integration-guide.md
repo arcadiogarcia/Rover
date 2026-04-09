@@ -46,7 +46,9 @@ Add AI-driven UI automation to any UWP app. zRover exposes your app's screen and
 
 ## Install the NuGet Package
 
-> **Debug builds only.** zRover is a development and testing tool — it exposes your app's screen and input over an unauthenticated local HTTP endpoint. **Never include zRover in release or production builds.** Exclude it from your release configuration (see [Add the Package Reference](#1-add-the-package-reference)).
+> **Debug builds only.** zRover is a development and testing tool — it exposes your app's screen and input over a local HTTP endpoint. **Never include zRover in release or production builds.** Exclude it from your release configuration (see [Add the Package Reference](#1-add-the-package-reference)).
+>
+> By default the endpoint requires no authentication. You can enable Bearer token auth by passing `requireAuthToken: true` and an `authToken` value to `DebugHost.Start()` (or setting the equivalent properties on `DebugHostOptions`), and then configuring the same token in your MCP client.
 
 ```
 dotnet add package zRover.Uwp --prerelease
