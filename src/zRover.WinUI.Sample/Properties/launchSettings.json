@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "zRover.WinUI.Sample (Package)": {
+      "commandName": "MsixPackage",
+      "nativeDebugging": false
+    }
+  }
+}

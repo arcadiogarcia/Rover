@@ -59,31 +59,6 @@ namespace zRover.Uwp.Capabilities
             catch { /* best-effort */ }
         }
 
-        private const string TapSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""x"": { ""type"": ""number"", ""description"": ""X coordinate. In the default normalized space this is 0.0 (left) to 1.0 (right)."" },
-    ""y"": { ""type"": ""number"", ""description"": ""Y coordinate. In the default normalized space this is 0.0 (top) to 1.0 (bottom)."" },
-    ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"", ""description"": ""Coordinate space: 'normalized' (default, 0.0-1.0 relative to window size) or 'pixels' (render pixels, matching windowWidth/windowHeight from capture_current_view)."" },
-    ""device"": { ""type"": ""string"", ""enum"": [""touch"", ""mouse""], ""default"": ""touch"" },
-    ""dryRun"": { ""type"": ""boolean"", ""default"": false, ""description"": ""If true, captures an annotated screenshot showing where the tap would land but does NOT actually inject the input. Use this to verify coordinates before committing."" }
-  },
-  ""required"": [""x"", ""y""]
-}";
-
-        private const string DragSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""points"": { ""type"": ""array"", ""items"": { ""$ref"": ""#/$defs/point"" }, ""minItems"": 2, ""description"": ""Ordered waypoints for the drag gesture."" },
-    ""durationMs"": { ""type"": ""integer"", ""default"": 300, ""description"": ""Total duration of the drag in milliseconds."" },
-    ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"", ""description"": ""Coordinate space: 'normalized' (default, 0.0-1.0 relative to window size) or 'pixels' (render pixels, matching windowWidth/windowHeight from capture_current_view)."" },
-    ""device"": { ""type"": ""string"", ""enum"": [""touch"", ""mouse""], ""default"": ""touch"" },
-    ""dryRun"": { ""type"": ""boolean"", ""default"": false, ""description"": ""If true, captures an annotated screenshot showing the drag path but does NOT actually inject the input. Use this to verify the path before committing."" }
-  },
-  ""required"": [""points""],
-  ""$defs"": { ""point"": { ""type"": ""object"", ""properties"": { ""x"": {""type"":""number"", ""description"": ""X position (0.0–1.0 in normalized space)""}, ""y"": {""type"":""number"", ""description"": ""Y position (0.0–1.0 in normalized space)""} }, ""required"": [""x"",""y""] } }
-}";
-
         public string Name => "InputInjection";
 
         public async Task StartAsync(DebugHostContext context)
@@ -156,7 +131,7 @@ namespace zRover.Uwp.Capabilities
                 "Set dryRun=true to preview the tap location without actually injecting input. " +
                 "Use coordinateSpace='normalized' (default, 0.0-1.0 relative to window) or 'pixels' (render pixels matching windowWidth/windowHeight from capture_current_view). " +
                 "Use capture_current_view first to see the UI layout.",
-                TapSchema,
+                ToolSchemas.TapSchema,
                 InjectTapAsync);
 
             registry.RegisterTool(
@@ -167,7 +142,7 @@ namespace zRover.Uwp.Capabilities
                 "Set dryRun=true to preview the drag path without actually injecting input. " +
                 "Use coordinateSpace='normalized' (default, 0.0-1.0 relative to window) or 'pixels' (render pixels matching windowWidth/windowHeight from capture_current_view). " +
                 "Use capture_current_view first to see the UI layout.",
-                DragSchema,
+                ToolSchemas.DragSchema,
                 InjectDragPathAsync);
 
             RegisterKeyboardTools(registry);
@@ -523,23 +498,8 @@ namespace zRover.Uwp.Capabilities
             if (resolvedPath.Count < 2 || dpiScale <= 0)
                 return null;
 
-            // Generate intermediate points (DIP coordinates) for smooth drag
-            var allPoints = new List<CoordinatePoint>();
-            for (int i = 0; i < resolvedPath.Count - 1; i++)
-            {
-                int intermediateSteps = Math.Max(10, req.DurationMs / 16);
-                if (resolvedPath.Count > 2) intermediateSteps = Math.Max(5, intermediateSteps / (resolvedPath.Count - 1));
-                for (int j = 0; j <= intermediateSteps; j++)
-                {
-                    double t = (double)j / intermediateSteps;
-                    double x = resolvedPath[i].X + t * (resolvedPath[i + 1].X - resolvedPath[i].X);
-                    double y = resolvedPath[i].Y + t * (resolvedPath[i + 1].Y - resolvedPath[i].Y);
-                    allPoints.Add(new CoordinatePoint(x, y));
-                }
-            }
-
-            int totalDelayMs = req.DurationMs;
-            int delayPerPoint = Math.Max(1, totalDelayMs / Math.Max(1, allPoints.Count - 1));
+            var allPoints = resolvedPath;
+            int delayPerPoint = Math.Max(1, req.DurationMs / Math.Max(1, allPoints.Count - 1));
 
             if (useTouch)
             {
@@ -583,6 +543,7 @@ namespace zRover.Uwp.Capabilities
                             {
                                 PointerId = 1,
                                 PointerOptions = InjectedInputPointerOptions.InContact
+                                               | InjectedInputPointerOptions.InRange
                                                | InjectedInputPointerOptions.Update,
                                 PixelLocation = new InjectedInputPoint { PositionX = rawX, PositionY = rawY }
                             },

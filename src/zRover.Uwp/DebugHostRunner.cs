@@ -35,9 +35,15 @@ namespace zRover.Uwp
             // Auto-wire UWP crash, lifecycle, and XAML diagnostics once — seamlessly.
             WireUwpDiagnostics();
 
-            var dispatcher = CoreApplication.MainView.CoreWindow.Dispatcher;
             Func<Func<Task>, Task> runOnUiThread = async (work) =>
             {
+                // Acquire the dispatcher lazily so we always get the live CoreWindow
+                // dispatcher rather than one captured early in startup (which may still
+                // be null when CoreWindow hasn't fully initialised yet).
+                var dispatcher = CoreApplication.MainView?.CoreWindow?.Dispatcher
+                    ?? throw new InvalidOperationException(
+                        "CoreApplication.MainView.CoreWindow.Dispatcher is unavailable. " +
+                        "Ensure RoverMcp.StartAsync is called after Window.Current.Activate().");
                 var tcs = new TaskCompletionSource<bool>();
                 await dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
                 {

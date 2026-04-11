@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
@@ -15,7 +15,7 @@
   <mp:PhoneIdentity PhoneProductId="a1270004-b000-4000-8000-000000000004" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
 
   <Properties>
-    <DisplayName>zRover Sample</DisplayName>
+    <DisplayName>zRover UWP Sample</DisplayName>
     <PublisherDisplayName>arcad</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -33,12 +33,12 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="zRover.Uwp.Sample.App">
       <uap:VisualElements
-        DisplayName="zRover Sample"
+        DisplayName="zRover UWP Sample"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png"
         Description="zRover MCP Debug Host — Sample App"
         BackgroundColor="transparent">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"  Square71x71Logo="Assets\SmallTile.png" Square310x310Logo="Assets\LargeTile.png"/>
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
 

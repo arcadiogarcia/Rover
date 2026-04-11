@@ -25,6 +25,89 @@ class Program
     [DllImport("user32.dll")]   static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     private const int SW_HIDE = 0;
 
+    // P/Invoke for bringing the app's ApplicationFrameWindow to Z-order top before
+    // input injection, so that inputInjectionBrokered touch events hit the correct window.
+    delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet = CharSet.Auto)] static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
+    [DllImport("user32.dll")] static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, string? lpszWindow);
+    [DllImport("user32.dll", CharSet = CharSet.Auto)] static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    static readonly IntPtr HWND_TOP = IntPtr.Zero;
+    const uint SWP_NOMOVE = 0x0002;
+    const uint SWP_NOSIZE = 0x0001;
+
+    /// <summary>
+    /// Finds the ApplicationFrameWindow that hosts the CoreWindow owned by
+    /// <paramref name="processName"/> and moves it to Z-order top — no focus
+    /// change, no show/hide — so that inputInjectionBrokered events land on it.
+    /// </summary>
+    static void BringWindowToZTop(string processName)
+    {
+        try
+        {
+            var procs = System.Diagnostics.Process.GetProcessesByName(processName);
+            if (procs.Length == 0) return;
+            var pids = new HashSet<uint>(procs.Select(p => (uint)p.Id));
+
+            IntPtr target = IntPtr.Zero;
+            // For packaged UWP apps the visible frame is an "ApplicationFrameWindow" owned
+            // by ApplicationFrameHost.exe, which CONTAINS a "Windows.UI.Core.CoreWindow"
+            // child that belongs to the UWP process.  We locate the frame by inspecting
+            // the CoreWindow child's owning process — never touching the CoreWindow itself.
+            EnumWindowsProc callback = (hWnd, _) =>
+            {
+                if (!IsWindowVisible(hWnd)) return true;
+                var cls = new System.Text.StringBuilder(128);
+                GetClassName(hWnd, cls, cls.Capacity);
+                if (cls.ToString() == "ApplicationFrameWindow")
+                {
+                    var child = FindWindowEx(hWnd, IntPtr.Zero, "Windows.UI.Core.CoreWindow", null);
+                    if (child != IntPtr.Zero)
+                    {
+                        GetWindowThreadProcessId(child, out uint childPid);
+                        if (pids.Contains(childPid)) { target = hWnd; return false; }
+                    }
+                }
+                return true;
+            };
+            EnumWindows(callback, IntPtr.Zero);
+            GC.KeepAlive(callback);
+
+            // ARM64 / Windows 11 fallback: CoreWindow is not found as a Win32 child of AFW
+            // via FindWindowEx on some hardware.  Match by window title keyword instead.
+            if (target == IntPtr.Zero)
+            {
+                // "zRover.Uwp.Sample" → keyword "zRover"; matches title "zRover UWP Sample".
+                var keyword = processName.Contains('.') ? processName.Split('.')[0] : processName;
+                EnumWindowsProc titleCallback = (hWnd, _) =>
+                {
+                    if (!IsWindowVisible(hWnd)) return true;
+                    var cls2 = new System.Text.StringBuilder(128);
+                    GetClassName(hWnd, cls2, cls2.Capacity);
+                    if (cls2.ToString() == "ApplicationFrameWindow")
+                    {
+                        var ttl = new System.Text.StringBuilder(256);
+                        GetWindowText(hWnd, ttl, ttl.Capacity);
+                        if (ttl.ToString().Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                        { target = hWnd; return false; }
+                    }
+                    return true;
+                };
+                EnumWindows(titleCallback, IntPtr.Zero);
+                GC.KeepAlive(titleCallback);
+            }
+
+            if (target != IntPtr.Zero)
+                // Z-order change only — no focus steal, no SWP_SHOWWINDOW.
+                SetWindowPos(target, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        }
+        catch { /* best-effort */ }
+    }
+
     static async Task Main(string[] args)
     {
         // Hide the console window immediately so it doesn't steal focus from the UWP app.
@@ -63,9 +146,24 @@ class Program
             Console.Error.WriteLine($"[McpServer] Registering proxy tool: {tool.Name}");
             var capturedName = tool.Name;
 
-            adapter.RegisterTool(tool.Name, tool.Description, tool.InputSchema,
-                (Func<string, Task<RoverToolResult>>)(argsJson =>
-                    backend.InvokeToolAsync(capturedName, argsJson)));
+            Func<string, Task<RoverToolResult>> handler = argsJson =>
+                backend.InvokeToolAsync(capturedName, argsJson);
+
+            // For any input-injection tool, bring the UWP window to the Z-order top first
+            // so that inputInjectionBrokered events land on the correct window even when
+            // another application (e.g. VS Code or a terminal) is in the foreground.
+            if (capturedName.StartsWith("inject_", StringComparison.OrdinalIgnoreCase))
+            {
+                var inner = handler;
+                handler = async argsJson =>
+                {
+                    BringWindowToZTop(appName);
+                    await Task.Delay(80); // allow Z-order change to take effect
+                    return await inner(argsJson);
+                };
+            }
+
+            adapter.RegisterTool(tool.Name, tool.Description, tool.InputSchema, handler);
         }
 
         // Register with the Retriever if a manager URL was provided.

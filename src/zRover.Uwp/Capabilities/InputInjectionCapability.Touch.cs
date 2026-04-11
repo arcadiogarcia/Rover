@@ -12,62 +12,6 @@ namespace zRover.Uwp.Capabilities
 {
     public sealed partial class InputInjectionCapability
     {
-        private const string MultiTouchSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""pointers"": {
-      ""type"": ""array"",
-      ""items"": {
-        ""type"": ""object"",
-        ""properties"": {
-          ""id"": { ""type"": ""integer"", ""description"": ""Unique pointer ID (1-based)."" },
-          ""path"": { ""type"": ""array"", ""items"": { ""type"": ""object"", ""properties"": { ""x"": {""type"":""number""}, ""y"": {""type"":""number""} }, ""required"": [""x"",""y""] }, ""minItems"": 1 },
-          ""pressure"": { ""type"": ""number"", ""default"": 1.0 },
-          ""orientation"": { ""type"": ""integer"", ""default"": 0, ""description"": ""Contact orientation 0-359 degrees."" },
-          ""contactWidth"": { ""type"": ""integer"", ""default"": 4 },
-          ""contactHeight"": { ""type"": ""integer"", ""default"": 4 }
-        },
-        ""required"": [""id"", ""path""]
-      },
-      ""description"": ""Array of pointer paths to inject simultaneously.""
-    },
-    ""durationMs"": { ""type"": ""integer"", ""default"": 400, ""description"": ""Total gesture duration in ms."" },
-    ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"" },
-    ""dryRun"": { ""type"": ""boolean"", ""default"": false }
-  },
-  ""required"": [""pointers""]
-}";
-
-        private const string PinchSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""centerX"": { ""type"": ""number"", ""description"": ""Center X of the pinch gesture."" },
-    ""centerY"": { ""type"": ""number"", ""description"": ""Center Y of the pinch gesture."" },
-    ""startDistance"": { ""type"": ""number"", ""default"": 0.3, ""description"": ""Starting distance between fingers (normalized)."" },
-    ""endDistance"": { ""type"": ""number"", ""default"": 0.1, ""description"": ""Ending distance between fingers (normalized). Less than startDistance = pinch in, greater = pinch out."" },
-    ""angle"": { ""type"": ""number"", ""default"": 0, ""description"": ""Angle of the pinch axis in degrees."" },
-    ""durationMs"": { ""type"": ""integer"", ""default"": 400 },
-    ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"" },
-    ""dryRun"": { ""type"": ""boolean"", ""default"": false }
-  },
-  ""required"": [""centerX"", ""centerY""]
-}";
-
-        private const string RotateSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""centerX"": { ""type"": ""number"", ""description"": ""Center X of the rotation."" },
-    ""centerY"": { ""type"": ""number"", ""description"": ""Center Y of the rotation."" },
-    ""distance"": { ""type"": ""number"", ""default"": 0.2, ""description"": ""Distance of each finger from center (normalized)."" },
-    ""startAngle"": { ""type"": ""number"", ""default"": 0, ""description"": ""Starting angle in degrees."" },
-    ""endAngle"": { ""type"": ""number"", ""default"": 90, ""description"": ""Ending angle in degrees. Positive = clockwise."" },
-    ""durationMs"": { ""type"": ""integer"", ""default"": 400 },
-    ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"" },
-    ""dryRun"": { ""type"": ""boolean"", ""default"": false }
-  },
-  ""required"": [""centerX"", ""centerY""]
-}";
-
         private void RegisterTouchTools(IMcpToolRegistry registry)
         {
             registry.RegisterTool(
@@ -75,21 +19,21 @@ namespace zRover.Uwp.Capabilities
                 "Injects a multi-touch gesture with multiple simultaneous pointers. " +
                 "Each pointer follows its own path. All pointers are injected simultaneously at each frame. " +
                 "Use for custom multi-finger gestures. For common gestures, prefer inject_pinch or inject_rotate.",
-                MultiTouchSchema,
+                ToolSchemas.MultiTouchSchema,
                 InjectMultiTouchAsync);
 
             registry.RegisterTool(
                 "inject_pinch",
                 "Injects a pinch gesture (two fingers moving toward or away from each other). " +
                 "Set endDistance < startDistance to pinch in (zoom out), or endDistance > startDistance to pinch out (zoom in).",
-                PinchSchema,
+                ToolSchemas.PinchSchema,
                 InjectPinchAsync);
 
             registry.RegisterTool(
                 "inject_rotate",
                 "Injects a two-finger rotation gesture around a center point. " +
                 "Positive endAngle = clockwise rotation, negative = counter-clockwise.",
-                RotateSchema,
+                ToolSchemas.RotateSchema,
                 InjectRotateAsync);
         }
 

@@ -1,0 +1,10 @@
+<Window
+    x:Class="zRover.WinUI.Sample.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:zRover.WinUI.Sample"
+    Title="zRover WinUI Sample">
+
+    <local:MainPage x:Name="MainPageContent" />
+
+</Window>

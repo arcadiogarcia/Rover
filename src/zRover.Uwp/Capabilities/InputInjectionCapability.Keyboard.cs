@@ -10,25 +10,6 @@ namespace zRover.Uwp.Capabilities
 {
     public sealed partial class InputInjectionCapability
     {
-        private const string KeyPressSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""key"": { ""type"": ""string"", ""description"": ""Virtual key name (e.g. 'Enter', 'Tab', 'A', 'Left', 'Escape', 'Back', 'F5'). Uses Windows VirtualKey names without the 'Number' prefix for digits."" },
-    ""modifiers"": { ""type"": ""array"", ""items"": { ""type"": ""string"", ""enum"": [""Control"", ""Shift"", ""Menu"", ""Windows""] }, ""default"": [], ""description"": ""Modifier keys to hold during the key press."" },
-    ""holdDurationMs"": { ""type"": ""integer"", ""default"": 0, ""description"": ""How long to hold the key down in milliseconds. 0 for a normal press-and-release."" }
-  },
-  ""required"": [""key""]
-}";
-
-        private const string TextSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""text"": { ""type"": ""string"", ""description"": ""The text string to type. Each character is sent as a key press."" },
-    ""delayBetweenKeysMs"": { ""type"": ""integer"", ""default"": 30, ""description"": ""Delay in ms between each keystroke."" }
-  },
-  ""required"": [""text""]
-}";
-
         private void RegisterKeyboardTools(IMcpToolRegistry registry)
         {
             registry.RegisterTool(
@@ -36,7 +17,7 @@ namespace zRover.Uwp.Capabilities
                 "Injects a keyboard key press with optional modifier keys. " +
                 "Supports all Windows virtual key names. " +
                 "Use holdDurationMs for long-press scenarios (e.g. holding a key in a game).",
-                KeyPressSchema,
+                ToolSchemas.KeyPressSchema,
                 InjectKeyPressAsync);
 
             registry.RegisterTool(
@@ -44,7 +25,7 @@ namespace zRover.Uwp.Capabilities
                 "Types a string of text by injecting individual key presses for each character. " +
                 "Handles uppercase letters and common symbols by automatically applying Shift. " +
                 "For special keys (Enter, Tab, etc.), use inject_key_press instead.",
-                TextSchema,
+                ToolSchemas.TextSchema,
                 InjectTextAsync);
         }
 
@@ -67,6 +48,8 @@ namespace zRover.Uwp.Capabilities
             }
 
             Exception? error = null;
+            await _runOnUiThread(() => { try { Windows.UI.Xaml.Window.Current?.Activate(); } catch { } return Task.CompletedTask; }).ConfigureAwait(false);
+            await Task.Delay(60).ConfigureAwait(false);
             await _runOnUiThread(() =>
             {
                 try
@@ -156,6 +139,9 @@ namespace zRover.Uwp.Capabilities
                 });
             }
 
+            await _runOnUiThread(() => { try { Windows.UI.Xaml.Window.Current?.Activate(); } catch { } return Task.CompletedTask; }).ConfigureAwait(false);
+            await Task.Delay(60).ConfigureAwait(false);
+
             int typed = 0;
             Exception? error = null;
 
@@ -209,42 +195,6 @@ namespace zRover.Uwp.Capabilities
             }});
         }
 
-        private static Windows.System.VirtualKey ParseVirtualKey(string keyName)
-        {
-            if (Enum.TryParse<Windows.System.VirtualKey>(keyName, ignoreCase: true, out var vk))
-                return vk;
-
-            // Common aliases
-            switch (keyName.ToLowerInvariant())
-            {
-                case "ctrl": return Windows.System.VirtualKey.Control;
-                case "alt": return Windows.System.VirtualKey.Menu;
-                case "win": return Windows.System.VirtualKey.LeftWindows;
-                case "backspace": return Windows.System.VirtualKey.Back;
-                case "return": return Windows.System.VirtualKey.Enter;
-                case "esc": return Windows.System.VirtualKey.Escape;
-                case "del": return Windows.System.VirtualKey.Delete;
-                case "ins": return Windows.System.VirtualKey.Insert;
-                case "pgup": return Windows.System.VirtualKey.PageUp;
-                case "pgdn":
-                case "pgdown": return Windows.System.VirtualKey.PageDown;
-                case "up": return Windows.System.VirtualKey.Up;
-                case "down": return Windows.System.VirtualKey.Down;
-                case "left": return Windows.System.VirtualKey.Left;
-                case "right": return Windows.System.VirtualKey.Right;
-                case "space": return Windows.System.VirtualKey.Space;
-                default:
-                    // Try single digit/letter
-                    if (keyName.Length == 1)
-                    {
-                        char ch = char.ToUpperInvariant(keyName[0]);
-                        if (ch >= 'A' && ch <= 'Z')
-                            return (Windows.System.VirtualKey)(int)ch;
-                        if (ch >= '0' && ch <= '9')
-                            return (Windows.System.VirtualKey)((int)Windows.System.VirtualKey.Number0 + (ch - '0'));
-                    }
-                    throw new ArgumentException($"Unknown virtual key: '{keyName}'");
-            }
-        }
+        private static ushort ParseVirtualKey(string keyName) => VirtualKeyHelper.ParseVirtualKey(keyName);
     }
 }

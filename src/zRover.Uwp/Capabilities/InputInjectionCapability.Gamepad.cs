@@ -12,44 +12,6 @@ namespace zRover.Uwp.Capabilities
 {
     public sealed partial class InputInjectionCapability
     {
-        private const string GamepadInputSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""buttons"": { ""type"": ""array"", ""items"": { ""type"": ""string"", ""enum"": [""A"", ""B"", ""X"", ""Y"", ""LeftThumbstick"", ""RightThumbstick"", ""LeftShoulder"", ""RightShoulder"", ""View"", ""Menu"", ""DPadUp"", ""DPadDown"", ""DPadLeft"", ""DPadRight"", ""Paddle1"", ""Paddle2"", ""Paddle3"", ""Paddle4""] }, ""default"": [], ""description"": ""Gamepad buttons to press."" },
-    ""leftStickX"": { ""type"": ""number"", ""default"": 0.0, ""description"": ""Left thumbstick X axis (-1.0 to 1.0)."" },
-    ""leftStickY"": { ""type"": ""number"", ""default"": 0.0, ""description"": ""Left thumbstick Y axis (-1.0 to 1.0)."" },
-    ""rightStickX"": { ""type"": ""number"", ""default"": 0.0, ""description"": ""Right thumbstick X axis (-1.0 to 1.0)."" },
-    ""rightStickY"": { ""type"": ""number"", ""default"": 0.0, ""description"": ""Right thumbstick Y axis (-1.0 to 1.0)."" },
-    ""leftTrigger"": { ""type"": ""number"", ""default"": 0.0, ""description"": ""Left trigger (0.0 to 1.0)."" },
-    ""rightTrigger"": { ""type"": ""number"", ""default"": 0.0, ""description"": ""Right trigger (0.0 to 1.0)."" },
-    ""holdDurationMs"": { ""type"": ""integer"", ""default"": 100, ""description"": ""How long to hold the gamepad state in ms."" }
-  }
-}";
-
-        private const string GamepadSequenceSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""frames"": {
-      ""type"": ""array"",
-      ""items"": {
-        ""type"": ""object"",
-        ""properties"": {
-          ""buttons"": { ""type"": ""array"", ""items"": { ""type"": ""string"" }, ""default"": [] },
-          ""leftStickX"": { ""type"": ""number"", ""default"": 0.0 },
-          ""leftStickY"": { ""type"": ""number"", ""default"": 0.0 },
-          ""rightStickX"": { ""type"": ""number"", ""default"": 0.0 },
-          ""rightStickY"": { ""type"": ""number"", ""default"": 0.0 },
-          ""leftTrigger"": { ""type"": ""number"", ""default"": 0.0 },
-          ""rightTrigger"": { ""type"": ""number"", ""default"": 0.0 },
-          ""durationMs"": { ""type"": ""integer"", ""default"": 100, ""description"": ""Duration to hold this frame before moving to the next."" }
-        }
-      },
-      ""description"": ""Sequence of gamepad frames to inject in order.""
-    }
-  },
-  ""required"": [""frames""]
-}";
-
         private void RegisterGamepadTools(IMcpToolRegistry registry)
         {
             registry.RegisterTool(
@@ -57,7 +19,7 @@ namespace zRover.Uwp.Capabilities
                 "Injects a single gamepad input state — buttons, thumbsticks, and triggers. " +
                 "The state is held for holdDurationMs then released (all-zero state sent). " +
                 "For complex sequences, use inject_gamepad_sequence instead.",
-                GamepadInputSchema,
+                ToolSchemas.GamepadInputSchema,
                 InjectGamepadInputAsync);
 
             registry.RegisterTool(
@@ -66,7 +28,7 @@ namespace zRover.Uwp.Capabilities
                 "Each frame specifies buttons, sticks, triggers, and a hold duration. " +
                 "After the last frame, a neutral (all-zero) state is sent to release everything. " +
                 "Use this for combo inputs, movement sequences, or timed button presses.",
-                GamepadSequenceSchema,
+                ToolSchemas.GamepadSequenceSchema,
                 InjectGamepadSequenceAsync);
         }
 

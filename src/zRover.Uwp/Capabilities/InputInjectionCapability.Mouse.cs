@@ -10,30 +10,6 @@ namespace zRover.Uwp.Capabilities
 {
     public sealed partial class InputInjectionCapability
     {
-        private const string MouseScrollSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""x"": { ""type"": ""number"", ""description"": ""X coordinate where the scroll occurs."" },
-    ""y"": { ""type"": ""number"", ""description"": ""Y coordinate where the scroll occurs."" },
-    ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"" },
-    ""deltaY"": { ""type"": ""integer"", ""default"": -120, ""description"": ""Vertical scroll amount. Negative scrolls down, positive scrolls up. 120 = one notch."" },
-    ""deltaX"": { ""type"": ""integer"", ""default"": 0, ""description"": ""Horizontal scroll amount. Negative scrolls left, positive scrolls right. 120 = one notch."" },
-    ""dryRun"": { ""type"": ""boolean"", ""default"": false, ""description"": ""If true, previews the scroll location without injecting."" }
-  },
-  ""required"": [""x"", ""y""]
-}";
-
-        private const string MouseMoveSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""x"": { ""type"": ""number"", ""description"": ""Target X coordinate."" },
-    ""y"": { ""type"": ""number"", ""description"": ""Target Y coordinate."" },
-    ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"" },
-    ""dryRun"": { ""type"": ""boolean"", ""default"": false, ""description"": ""If true, previews the move target without injecting."" }
-  },
-  ""required"": [""x"", ""y""]
-}";
-
         private void RegisterMouseTools(IMcpToolRegistry registry)
         {
             registry.RegisterTool(
@@ -43,14 +19,14 @@ namespace zRover.Uwp.Capabilities
                 "deltaY: negative = scroll down, positive = scroll up. " +
                 "deltaX: negative = scroll left, positive = scroll right. " +
                 "One wheel notch = 120 units.",
-                MouseScrollSchema,
+                ToolSchemas.MouseScrollSchema,
                 InjectMouseScrollAsync);
 
             registry.RegisterTool(
                 "inject_mouse_move",
                 "Moves the mouse cursor to the specified coordinates without clicking. " +
                 "Useful for hover effects, tooltips, or positioning before other actions.",
-                MouseMoveSchema,
+                ToolSchemas.MouseMoveSchema,
                 InjectMouseMoveAsync);
         }
 
@@ -147,6 +123,7 @@ namespace zRover.Uwp.Capabilities
             {
                 try
                 {
+                    try { Windows.UI.Xaml.Window.Current?.Activate(); } catch { }
                     var space = ParseSpace(req.CoordinateSpace);
                     resolved = _resolver!.Resolve(new CoordinatePoint(req.X, req.Y), space);
                     var dispInfo = Windows.Graphics.Display.DisplayInformation.GetForCurrentView();
@@ -254,6 +231,7 @@ namespace zRover.Uwp.Capabilities
             {
                 try
                 {
+                    try { Windows.UI.Xaml.Window.Current?.Activate(); } catch { }
                     var space = ParseSpace(req.CoordinateSpace);
                     resolved = _resolver!.Resolve(new CoordinatePoint(req.X, req.Y), space);
                     var dispInfo = Windows.Graphics.Display.DisplayInformation.GetForCurrentView();

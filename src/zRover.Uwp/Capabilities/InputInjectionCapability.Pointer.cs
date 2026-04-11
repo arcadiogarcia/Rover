@@ -19,49 +19,6 @@ namespace zRover.Uwp.Capabilities
                 ? PointerSessionState.DeviceKind.Pen
                 : PointerSessionState.DeviceKind.Touch;
 
-        private const string PointerDownSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""pointerId"": { ""type"": ""integer"", ""default"": 1, ""description"": ""Unique pointer ID (1-based). Use different IDs for multi-finger touch gestures. Pen supports only one active pointer."" },
-    ""x"": { ""type"": ""number"", ""description"": ""X coordinate. In the default normalized space this is 0.0 (left) to 1.0 (right)."" },
-    ""y"": { ""type"": ""number"", ""description"": ""Y coordinate. In the default normalized space this is 0.0 (top) to 1.0 (bottom)."" },
-    ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"" },
-    ""device"": { ""type"": ""string"", ""enum"": [""touch"", ""pen""], ""default"": ""touch"", ""description"": ""Input device type. 'touch' supports multiple simultaneous pointers; 'pen' supports one pointer with tilt, rotation, barrel, and eraser."" },
-    ""pressure"": { ""type"": ""number"", ""default"": 1.0, ""description"": ""Contact pressure 0.0-1.0 (default 1.0 for touch, 0.5 for pen)."" },
-    ""orientation"": { ""type"": ""integer"", ""default"": 0, ""description"": ""(touch only) Contact orientation 0-359 degrees."" },
-    ""contactWidth"": { ""type"": ""integer"", ""default"": 4, ""description"": ""(touch only) Contact patch width."" },
-    ""contactHeight"": { ""type"": ""integer"", ""default"": 4, ""description"": ""(touch only) Contact patch height."" },
-    ""tiltX"": { ""type"": ""integer"", ""default"": 0, ""description"": ""(pen only) X tilt in degrees (-90 to 90)."" },
-    ""tiltY"": { ""type"": ""integer"", ""default"": 0, ""description"": ""(pen only) Y tilt in degrees (-90 to 90)."" },
-    ""rotation"": { ""type"": ""number"", ""default"": 0.0, ""description"": ""(pen only) Pen rotation in degrees (0.0-359.0)."" },
-    ""barrel"": { ""type"": ""boolean"", ""default"": false, ""description"": ""(pen only) Whether the barrel button is pressed."" },
-    ""eraser"": { ""type"": ""boolean"", ""default"": false, ""description"": ""(pen only) Whether the eraser end is active."" }
-  },
-  ""required"": [""x"", ""y""]
-}";
-
-        private const string PointerMoveSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""pointerId"": { ""type"": ""integer"", ""default"": 1, ""description"": ""Pointer ID of an active (held-down) pointer."" },
-    ""x"": { ""type"": ""number"", ""description"": ""New X coordinate."" },
-    ""y"": { ""type"": ""number"", ""description"": ""New Y coordinate."" },
-    ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"" },
-    ""pressure"": { ""type"": ""number"", ""description"": ""Updated pressure (optional, keeps previous value if omitted)."" },
-    ""tiltX"": { ""type"": ""integer"", ""description"": ""(pen only) Updated X tilt (optional)."" },
-    ""tiltY"": { ""type"": ""integer"", ""description"": ""(pen only) Updated Y tilt (optional)."" },
-    ""rotation"": { ""type"": ""number"", ""description"": ""(pen only) Updated rotation (optional)."" }
-  },
-  ""required"": [""x"", ""y""]
-}";
-
-        private const string PointerUpSchema = @"{
-  ""type"": ""object"",
-  ""properties"": {
-    ""pointerId"": { ""type"": ""integer"", ""default"": 1, ""description"": ""Pointer ID of the active pointer to release. When the last touch pointer is released the touch injection session is torn down."" }
-  }
-}";
-
         private void RegisterPointerTools(IMcpToolRegistry registry)
         {
             registry.RegisterTool(
@@ -74,7 +31,7 @@ namespace zRover.Uwp.Capabilities
                 "(only one pen pointer can be active at a time). " +
                 "Combine with pointer_move and pointer_up for complex multi-step gestures " +
                 "where the full path is not known in advance.",
-                PointerDownSchema,
+                ToolSchemas.PointerDownSchema,
                 PointerDownAsync);
 
             registry.RegisterTool(
@@ -84,7 +41,7 @@ namespace zRover.Uwp.Capabilities
                 "The pointer must have been created with pointer_down first. " +
                 "For pen pointers, tiltX, tiltY, and rotation can be updated per move. " +
                 "Can be called repeatedly to trace an incremental path.",
-                PointerMoveSchema,
+                ToolSchemas.PointerMoveSchema,
                 PointerMoveAsync);
 
             registry.RegisterTool(
@@ -92,7 +49,7 @@ namespace zRover.Uwp.Capabilities
                 "Releases an active pointer (touch or pen). " +
                 "When the last active touch pointer is released, the touch injection session is automatically torn down. " +
                 "Always release all pointers when the gesture is complete to avoid stuck inputs.",
-                PointerUpSchema,
+                ToolSchemas.PointerUpSchema,
                 PointerUpAsync);
         }
 

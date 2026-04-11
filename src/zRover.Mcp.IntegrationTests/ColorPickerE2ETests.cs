@@ -49,6 +49,25 @@ public class ColorPickerE2ETests : IAsyncLifetime
     // ═══════════════════════════════════════════════════════════════
 
     /// <summary>
+    /// Navigates to the Color Picker tab via dispatch_action — ensures the Pivot
+    /// is on the correct tab before button lookup or tap.  A fixed delay lets the
+    /// Pivot slide animation finish before the visual tree is accessed.
+    /// </summary>
+    private async Task SwitchToColorPickerTabAsync()
+    {
+        var result = await _client.CallToolAsync("dispatch_action",
+            new Dictionary<string, object?>
+            {
+                { "action", "SwitchTab" },
+                { "params", new Dictionary<string, object?> { { "tab", "Color Picker" } } }
+            });
+        result.IsError.Should().NotBe(true, "dispatch_action SwitchTab 'Color Picker' failed");
+
+        // Allow the Pivot slide animation to complete before we read the visual tree.
+        await Task.Delay(400);
+    }
+
+    /// <summary>
     /// Uses dispatch_action to programmatically set a preset color — reliable setup
     /// that does not depend on knowing exact UI coordinates.
     /// </summary>
@@ -164,6 +183,7 @@ public class ColorPickerE2ETests : IAsyncLifetime
     public async Task TapRedButton_HexLabelBecomesFF0000()
     {
         await SetColorAsync("Blue");           // reset to a known different state
+        await SwitchToColorPickerTabAsync();
         var (x, y) = await FindButtonCenterAsync("Red");
         await TapAtAsync(x, y);
         await WaitForStableAsync();
@@ -176,6 +196,7 @@ public class ColorPickerE2ETests : IAsyncLifetime
     public async Task TapGreenButton_HexLabelBecomesGreen()
     {
         await SetColorAsync("Red");            // reset
+        await SwitchToColorPickerTabAsync();
         var (x, y) = await FindButtonCenterAsync("Green");
         await TapAtAsync(x, y);
         await WaitForStableAsync();
@@ -188,6 +209,7 @@ public class ColorPickerE2ETests : IAsyncLifetime
     public async Task TapBlueButton_HexLabelBecomesBlue()
     {
         await SetColorAsync("Red");            // reset
+        await SwitchToColorPickerTabAsync();
         var (x, y) = await FindButtonCenterAsync("Blue");
         await TapAtAsync(x, y);
         await WaitForStableAsync();
@@ -200,6 +222,7 @@ public class ColorPickerE2ETests : IAsyncLifetime
     public async Task TapYellowButton_HexLabelBecomesYellow()
     {
         await SetColorAsync("Blue");            // reset
+        await SwitchToColorPickerTabAsync();
         var (x, y) = await FindButtonCenterAsync("Yellow");
         await TapAtAsync(x, y);
         await WaitForStableAsync();
@@ -212,6 +235,7 @@ public class ColorPickerE2ETests : IAsyncLifetime
     public async Task TapWhiteButton_HexLabelBecomesWhite()
     {
         await SetColorAsync("Blue");            // reset
+        await SwitchToColorPickerTabAsync();
         var (x, y) = await FindButtonCenterAsync("White");
         await TapAtAsync(x, y);
         await WaitForStableAsync();

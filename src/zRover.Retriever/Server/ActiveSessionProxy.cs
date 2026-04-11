@@ -96,6 +96,8 @@ public sealed class ActiveSessionProxy
 
             _toolsInitialised = true;
         }
+
+        _adapter.NotifyToolsChanged();
     }
 
     private async Task<RoverToolResult> ProxyInvokeAsync(string toolName, string argsJson)

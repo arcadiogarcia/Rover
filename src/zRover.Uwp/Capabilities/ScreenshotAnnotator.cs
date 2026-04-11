@@ -27,8 +27,12 @@ namespace zRover.Uwp.Capabilities
         /// </summary>
         public static async Task<SoftwareBitmap> CaptureUiAsBitmapAsync()
         {
+            var content = Window.Current?.Content
+                ?? throw new InvalidOperationException(
+                    "Window.Current.Content is unavailable. " +
+                    "Ensure this method is called on the UI thread with an active window.");
             var rtb = new RenderTargetBitmap();
-            await rtb.RenderAsync(Window.Current.Content);
+            await rtb.RenderAsync(content);
             var pixels = await rtb.GetPixelsAsync();
             return SoftwareBitmap.CreateCopyFromBuffer(
                 pixels,

@@ -118,7 +118,6 @@
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
-
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
@@ -142,14 +141,12 @@
       <Version>13.0.3</Version>
     </PackageReference>
   </ItemGroup>
-
   <!-- Desktop Extension SDK for FullTrustProcessLauncher -->
   <ItemGroup>
     <SDKReference Include="WindowsDesktop, Version=10.0.26100.0">
       <Name>Windows Desktop Extensions for the UWP</Name>
     </SDKReference>
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\zRover.Uwp\zRover.Uwp.csproj">
       <Project>{A1270003-B000-4000-8000-000000000003}</Project>
@@ -158,15 +155,58 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Assets\LargeTile.scale-100.png" />
+    <Content Include="Assets\LargeTile.scale-125.png" />
+    <Content Include="Assets\LargeTile.scale-150.png" />
+    <Content Include="Assets\LargeTile.scale-200.png" />
+    <Content Include="Assets\LargeTile.scale-400.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
+    <Content Include="Assets\SmallTile.scale-100.png" />
+    <Content Include="Assets\SmallTile.scale-125.png" />
+    <Content Include="Assets\SmallTile.scale-150.png" />
+    <Content Include="Assets\SmallTile.scale-200.png" />
+    <Content Include="Assets\SmallTile.scale-400.png" />
+    <Content Include="Assets\SplashScreen.scale-100.png" />
+    <Content Include="Assets\SplashScreen.scale-125.png" />
+    <Content Include="Assets\SplashScreen.scale-150.png" />
     <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\SplashScreen.scale-400.png" />
+    <Content Include="Assets\Square150x150Logo.scale-100.png" />
+    <Content Include="Assets\Square150x150Logo.scale-125.png" />
+    <Content Include="Assets\Square150x150Logo.scale-150.png" />
     <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-400.png" />
+    <Content Include="Assets\Square44x44Logo.altform-lightunplated_targetsize-16.png" />
+    <Content Include="Assets\Square44x44Logo.altform-lightunplated_targetsize-24.png" />
+    <Content Include="Assets\Square44x44Logo.altform-lightunplated_targetsize-256.png" />
+    <Content Include="Assets\Square44x44Logo.altform-lightunplated_targetsize-32.png" />
+    <Content Include="Assets\Square44x44Logo.altform-lightunplated_targetsize-48.png" />
+    <Content Include="Assets\Square44x44Logo.altform-unplated_targetsize-16.png" />
+    <Content Include="Assets\Square44x44Logo.altform-unplated_targetsize-256.png" />
+    <Content Include="Assets\Square44x44Logo.altform-unplated_targetsize-32.png" />
+    <Content Include="Assets\Square44x44Logo.altform-unplated_targetsize-48.png" />
+    <Content Include="Assets\Square44x44Logo.scale-100.png" />
+    <Content Include="Assets\Square44x44Logo.scale-125.png" />
+    <Content Include="Assets\Square44x44Logo.scale-150.png" />
     <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-400.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-16.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
-    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-256.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-32.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-48.png" />
+    <Content Include="Assets\StoreLogo.scale-100.png" />
+    <Content Include="Assets\StoreLogo.scale-125.png" />
+    <Content Include="Assets\StoreLogo.scale-150.png" />
+    <Content Include="Assets\StoreLogo.scale-200.png" />
+    <Content Include="Assets\StoreLogo.scale-400.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-100.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-125.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-150.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="Assets\Wide310x150Logo.scale-400.png" />
   </ItemGroup>
-
   <!-- ── FullTrust companion: paths ──────────────────────────────────── -->
   <PropertyGroup>
     <!-- Map UWP PlatformTarget to a dotnet RID so the FullTrust binary
@@ -179,7 +219,6 @@
     <_FullTrustRid Condition="'$(_FullTrustRid)' == ''">win-x64</_FullTrustRid>
     <FullTrustBuildDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\zRover.FullTrust.McpServer\bin\$(Configuration)\net8.0-windows10.0.19041.0\$(_FullTrustRid)\'))</FullTrustBuildDir>
   </PropertyGroup>
-
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
       <SubType>Designer</SubType>
@@ -191,9 +230,7 @@
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>
-
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
-
   <!--
     ── FullTrust companion: auto-build & include ────────────────────────
 
@@ -202,34 +239,23 @@
       * Copy output to AppX\FullTrust\ for VS F5 loose-layout debugging.
       * Inject into AppxPackagePayload for .msix packaging.
   -->
-  <Target Name="_BuildFullTrustProject" BeforeTargets="PrepareForBuild"
-          Condition="'$(BuildingInsideVisualStudio)' != 'true' and '$(BuildingSolutionFile)' != 'true' and ('$(SolutionDir)' == '' or '$(SolutionDir)' == '*Undefined*')">
+  <Target Name="_BuildFullTrustProject" BeforeTargets="PrepareForBuild" Condition="'$(BuildingInsideVisualStudio)' != 'true' and '$(BuildingSolutionFile)' != 'true' and ('$(SolutionDir)' == '' or '$(SolutionDir)' == '*Undefined*')">
     <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\zRover.FullTrust.McpServer\zRover.FullTrust.McpServer.csproj&quot; -c $(Configuration) -r $(_FullTrustRid) --no-self-contained" />
   </Target>
-
   <!-- Copy FullTrust output into the AppX loose layout so F5 debugging works. -->
-  <Target Name="_CopyFullTrustToLayout"
-          AfterTargets="Build"
-          DependsOnTargets="_BuildFullTrustProject"
-          Condition="Exists('$(OutDir)AppX\AppxManifest.xml')">
+  <Target Name="_CopyFullTrustToLayout" AfterTargets="Build" DependsOnTargets="_BuildFullTrustProject" Condition="Exists('$(OutDir)AppX\AppxManifest.xml')">
     <ItemGroup>
-      <_FTLayoutFiles Include="$(FullTrustBuildDir)**\*"
-                      Exclude="$(FullTrustBuildDir)**\*.pdb;$(FullTrustBuildDir)**\*.staticwebassets.*" />
+      <_FTLayoutFiles Include="$(FullTrustBuildDir)**\*" Exclude="$(FullTrustBuildDir)**\*.pdb;$(FullTrustBuildDir)**\*.staticwebassets.*" />
     </ItemGroup>
-    <Copy SourceFiles="@(_FTLayoutFiles)"
-          DestinationFiles="@(_FTLayoutFiles->'$(OutDir)AppX\FullTrust\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_FTLayoutFiles)" DestinationFiles="@(_FTLayoutFiles->'$(OutDir)AppX\FullTrust\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
-
   <!-- Inject FullTrust output into the .msix payload for packaged deployment. -->
   <Target Name="_AddFullTrustToPayload" BeforeTargets="_ComputeAppxPackagePayload">
     <ItemGroup>
-      <_FullTrustFiles Include="$(FullTrustBuildDir)**\*"
-                       Exclude="$(FullTrustBuildDir)**\*.pdb;$(FullTrustBuildDir)**\*.staticwebassets.*" />
+      <_FullTrustFiles Include="$(FullTrustBuildDir)**\*" Exclude="$(FullTrustBuildDir)**\*.pdb;$(FullTrustBuildDir)**\*.staticwebassets.*" />
       <AppxPackagePayload Include="@(_FullTrustFiles)">
         <TargetPath>FullTrust\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
       </AppxPackagePayload>
     </ItemGroup>
   </Target>
-
 </Project>
