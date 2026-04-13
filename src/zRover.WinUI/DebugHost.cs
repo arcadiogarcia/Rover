@@ -43,6 +43,13 @@ namespace zRover.WinUI
 
             if (options.Port == 0)
                 options.Port = FindFreePort();
+            else if (!IsPortAvailable(options.Port))
+            {
+                var fallback = FindFreePort();
+                RoverLog.Warn("zRover.Host", $"Port {options.Port} is already in use — falling back to {fallback}");
+                System.Diagnostics.Debug.WriteLine($"[zRover] Port {options.Port} in use, falling back to {fallback}");
+                options.Port = fallback;
+            }
 
             CurrentPort       = options.Port;
             CurrentManagerUrl = options.ManagerUrl;
@@ -87,6 +94,24 @@ namespace zRover.WinUI
             var port = ((IPEndPoint)listener.LocalEndpoint).Port;
             listener.Stop();
             return port;
+        }
+
+        /// <summary>
+        /// Returns true when no process is currently listening on <paramref name="port"/>.
+        /// </summary>
+        private static bool IsPortAvailable(int port)
+        {
+            try
+            {
+                var listener = new TcpListener(IPAddress.Loopback, port);
+                listener.Start();
+                listener.Stop();
+                return true;
+            }
+            catch (SocketException)
+            {
+                return false;
+            }
         }
 
         /// <summary>Stops the MCP debug host and releases all capabilities.</summary>

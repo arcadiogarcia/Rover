@@ -38,6 +38,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\zRover.WinUI\zRover.WinUI.csproj" />
+    <ProjectReference Include="..\zRover.Core\zRover.Core.csproj" />
   </ItemGroup>
 
 </Project>
