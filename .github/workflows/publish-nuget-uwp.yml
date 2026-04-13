@@ -1,4 +1,4 @@
-name: Publish NuGet Package
+name: Publish zRover.Uwp NuGet Package
 
 on:
   push:
@@ -43,6 +43,9 @@ jobs:
             Write-Host "Using nuspec version: $ver"
           }
           "version=$ver" >> $env:GITHUB_OUTPUT
+
+      - name: Restore NuGet packages
+        run: msbuild src/zRover.Uwp/zRover.Uwp.csproj /t:Restore
 
       - name: Build Rover.Uwp (Release)
         run: msbuild src/zRover.Uwp/zRover.Uwp.csproj /p:Configuration=Release /p:Platform=AnyCPU /t:Build /v:minimal
