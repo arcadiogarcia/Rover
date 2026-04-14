@@ -56,15 +56,13 @@ namespace zRover.WinUI.Capabilities
         /// <see cref="InjectedInputPoint.PositionX"/>/<see cref="InjectedInputPoint.PositionY"/>
         /// for touch and pen injection (physical pixels relative to the virtual desktop origin).
         ///
-        /// In DPI-unaware processes, Win32 coordinates are logical (not physical). However,
-        /// InjectTouchInput/InjectPenInput always require PHYSICAL pixel coordinates. To
-        /// bridge the gap, we temporarily switch to per-monitor DPI-aware context to get the
-        /// physical virtual-screen size, compute the physical:logical ratio, then restore.
+        /// WinUI 3 apps are always per-monitor DPI-aware, so the resolver returns true DIP
+        /// screen-space coordinates. InjectTouchInput/InjectPenInput require PHYSICAL pixel
+        /// coordinates. Multiply by dpiScale (XamlRoot.RasterizationScale) to convert.
         /// </summary>
         private (int x, int y) ToTouchInjectionPoint(double dipX, double dipY, double dpiScale)
         {
-            double physicalScale = GetPhysicalDpiScale();
-            return ((int)(dipX * physicalScale), (int)(dipY * physicalScale));
+            return ((int)(dipX * dpiScale), (int)(dipY * dpiScale));
         }
 
         // Cache the physical-to-logical scale once per process start.
@@ -124,19 +122,19 @@ namespace zRover.WinUI.Capabilities
         /// </summary>
         private (int normX, int normY) ToMouseNormalized(CoordinatePoint dipPoint, double dpiScale)
         {
-            // dipPoint is in logical (DIP) screen-space coordinates.
-            // GetSystemMetrics without a per-monitor-aware context also returns logical
-            // (non-scaled) virtual-screen dimensions on hi-DPI displays. Since both the
-            // numerator and denominator are in the same logical unit, no DPI scaling is
-            // needed: normX = dipX / logicalVW * 65535.
+            // dipPoint is in DIP screen-space coordinates. MOUSEEVENTF_ABSOLUTE|VIRTUALDESK
+            // normalises over PHYSICAL virtual-screen pixels: normX/65535 = physX/physVW.
             //
-            // Derivation for MOUSEEVENTF_ABSOLUTE|VIRTUALDESK (which normalises over
-            // physical pixels): normX/65535 = physX/physVW = (dipX*S)/(logVW*S) = dipX/logVW.
+            // WinUI 3 apps are per-monitor DPI-aware, so GetSystemMetrics already returns
+            // physical virtual-screen dimensions. Convert DIP → physical by multiplying by
+            // dpiScale (XamlRoot.RasterizationScale) before normalising.
+            //
+            // Derivation: normX/65535 = physX/physVW = (dipX*S)/physVW.
             int vW = GetSystemMetrics(SM_CXVIRTUALSCREEN);
             int vH = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 
-            int normX = vW > 0 ? (int)(dipPoint.X / vW * 65535) : 0;
-            int normY = vH > 0 ? (int)(dipPoint.Y / vH * 65535) : 0;
+            int normX = vW > 0 ? (int)(dipPoint.X * dpiScale / vW * 65535) : 0;
+            int normY = vH > 0 ? (int)(dipPoint.Y * dpiScale / vH * 65535) : 0;
             return (normX, normY);
         }
 
