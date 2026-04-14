@@ -51,11 +51,69 @@ jobs:
       - name: Restore NuGet packages
         run: dotnet restore src/zRover.WinUI/zRover.WinUI.csproj
 
-      - name: Build zRover.WinUI (Release)
+      - name: Build zRover.WinUI x64 (Release)
         run: msbuild src/zRover.WinUI/zRover.WinUI.csproj /p:Configuration=Release /p:Platform=x64 /t:Build /v:minimal
 
+      - name: Build zRover.WinUI x86 (Release)
+        run: msbuild src/zRover.WinUI/zRover.WinUI.csproj /p:Configuration=Release /p:Platform=x86 /t:Build /v:minimal
+
+      - name: Build zRover.WinUI ARM64 (Release)
+        run: msbuild src/zRover.WinUI/zRover.WinUI.csproj /p:Configuration=Release /p:Platform=ARM64 /t:Build /v:minimal
+
+      - name: Arrange multi-arch layout for NuGet
+        shell: pwsh
+        run: |
+          # WinUI 3 requires architecture-specific DLLs. Place each platform's output
+          # into runtimes/<rid>/lib/<tfm>/ so NuGet restores the correct binary at build time.
+          $tfm  = 'net8.0-windows10.0.19041.0'
+          $base = 'src/zRover.WinUI'
+          $stg  = "$base/bin/multiarch-stage"
+          $dlls = @('zRover.WinUI.dll', 'zRover.Core.dll', 'zRover.Mcp.dll')
+          $rids = @( @{rid='win-x64';   plat='x64'  },
+                     @{rid='win-x86';   plat='x86'  },
+                     @{rid='win-arm64'; plat='ARM64'} )
+          foreach ($r in $rids) {
+            $dest = "$stg/runtimes/$($r.rid)/lib/$tfm"
+            New-Item -ItemType Directory -Force -Path $dest | Out-Null
+            $src  = "$base/bin/$($r.plat)/Release/$tfm"
+            foreach ($dll in $dlls) {
+              $srcFile = "$src/$dll"
+              if (Test-Path $srcFile) { Copy-Item $srcFile $dest }
+              else { Write-Warning "Missing $srcFile" }
+            }
+          }
+          # Also place x64 DLLs in the normal lib/ folder as the "primary" reference assembly
+          # so that dotnet pack includes them as compile-time references (ref-only).
+          $libDest = "$stg/lib/$tfm"
+          New-Item -ItemType Directory -Force -Path $libDest | Out-Null
+          $src64 = "$base/bin/x64/Release/$tfm"
+          foreach ($dll in $dlls) {
+            $srcFile = "$src64/$dll"
+            if (Test-Path $srcFile) { Copy-Item $srcFile $libDest }
+          }
+          Write-Host "Multi-arch stage layout:"
+          Get-ChildItem $stg -Recurse -File | Select-Object -ExpandProperty FullName
+
       - name: Pack NuGet package
-        run: dotnet pack src/zRover.WinUI/zRover.WinUI.csproj -c Release /p:Platform=x64 --no-build -o src/zRover.WinUI/bin/nupkg
+        shell: pwsh
+        run: |
+          # Pack using x64 build (metadata only), then inject the multi-arch runtimes/ folder
+          dotnet pack src/zRover.WinUI/zRover.WinUI.csproj -c Release /p:Platform=x64 --no-build -o src/zRover.WinUI/bin/nupkg
+          # Unzip, add multi-arch content, repack
+          $ver      = '${{ steps.version.outputs.version }}'
+          $nupkg    = "src/zRover.WinUI/bin/nupkg/zRover.WinUI.$ver.nupkg"
+          $expand   = "src/zRover.WinUI/bin/nupkg-expand"
+          $stg      = "src/zRover.WinUI/bin/multiarch-stage"
+          Expand-Archive $nupkg $expand -Force
+          # Copy runtimes/ tree into the expanded package
+          Copy-Item "$stg/runtimes" $expand -Recurse -Force
+          # Re-create the nupkg (which is just a zip with .nupkg extension)
+          Remove-Item $nupkg
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $expandAbs  = (Resolve-Path $expand).Path
+          $nupkgOut   = Join-Path (Resolve-Path "src/zRover.WinUI/bin/nupkg").Path "zRover.WinUI.$ver.nupkg"
+          [System.IO.Compression.ZipFile]::CreateFromDirectory($expandAbs, $nupkgOut)
+          Write-Host "Repacked $nupkgOut"
 
       - name: Push to nuget.org
         run: dotnet nuget push src/zRover.WinUI/bin/nupkg/zRover.WinUI.${{ steps.version.outputs.version }}.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
