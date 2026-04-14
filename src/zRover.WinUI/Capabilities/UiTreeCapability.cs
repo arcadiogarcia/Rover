@@ -217,10 +217,6 @@ namespace zRover.WinUI.Capabilities
                     && string.IsNullOrEmpty(req.TypeName) && string.IsNullOrEmpty(req.Text))
                     return JsonConvert.SerializeObject(new FindElementResponse { Found = false, Error = "At least one of 'name', 'automationName', 'type', or 'text' is required." });
 
-                var windowContent = _window.Content as FrameworkElement;
-                if (windowContent == null)
-                    return JsonConvert.SerializeObject(new FindElementResponse { Found = false, Error = "Window content not available." });
-
                 var criteria = new ElementSearchHelper.SearchCriteria
                 {
                     Name = req.Name,
@@ -232,15 +228,33 @@ namespace zRover.WinUI.Capabilities
                     Index = req.Index
                 };
 
+                // All XAML property access (including _window.Content) must happen on the UI thread
                 List<ElementSearchHelper.ElementMatch> matches;
                 if (_context!.RunOnUiThread != null)
                 {
-                    matches = await ElementSearchHelper.FindElementsWithTimeoutAsync(
-                        _context.RunOnUiThread, windowContent, criteria, req.Timeout, req.Poll).ConfigureAwait(false);
+                    var deadline = req.Timeout > 0 ? DateTime.UtcNow.AddMilliseconds(req.Timeout) : DateTime.MinValue;
+                    matches = new List<ElementSearchHelper.ElementMatch>();
+                    do
+                    {
+                        await _context.RunOnUiThread(() =>
+                        {
+                            var windowContent = _window.Content as FrameworkElement;
+                            if (windowContent != null)
+                                matches = ElementSearchHelper.FindElements(windowContent, criteria);
+                            return Task.CompletedTask;
+                        }).ConfigureAwait(false);
+
+                        if (matches.Count > 0) break;
+                        if (req.Timeout <= 0) break;
+                        await Task.Delay(Math.Max(50, req.Poll)).ConfigureAwait(false);
+                    } while (DateTime.UtcNow < deadline);
                 }
                 else
                 {
-                    matches = ElementSearchHelper.FindElements(windowContent, criteria);
+                    var windowContent = _window.Content as FrameworkElement;
+                    matches = windowContent != null
+                        ? ElementSearchHelper.FindElements(windowContent, criteria)
+                        : new List<ElementSearchHelper.ElementMatch>();
                 }
 
                 if (matches.Count == 0)
@@ -299,47 +313,44 @@ namespace zRover.WinUI.Capabilities
                     string.IsNullOrWhiteSpace(argsJson) ? "{}" : argsJson)
                     ?? new HitTestRequest();
 
-                var windowContent = _window.Content as FrameworkElement;
-                if (windowContent == null)
-                    return JsonConvert.SerializeObject(new HitTestResponse { Success = false, Error = "Window content not available." });
-
                 double nx = req.X, ny = req.Y;
 
-                // If pixels, convert to normalized
-                if (string.Equals(req.CoordinateSpace, "pixels", StringComparison.OrdinalIgnoreCase))
-                {
-                    double winW = 0, winH = 0;
-                    if (_context!.RunOnUiThread != null)
-                    {
-                        await _context.RunOnUiThread(() =>
-                        {
-                            winW = windowContent.ActualWidth;
-                            winH = windowContent.ActualHeight;
-                            return Task.CompletedTask;
-                        }).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        winW = windowContent.ActualWidth;
-                        winH = windowContent.ActualHeight;
-                    }
-
-                    if (winW > 0) nx = req.X / winW;
-                    if (winH > 0) ny = req.Y / winH;
-                }
-
+                // All XAML property access must happen on the UI thread
                 ElementSearchHelper.ElementMatch? match = null;
                 if (_context!.RunOnUiThread != null)
                 {
                     await _context.RunOnUiThread(() =>
                     {
+                        var windowContent = _window.Content as FrameworkElement;
+                        if (windowContent == null) return Task.CompletedTask;
+
+                        // If pixels, convert to normalized
+                        if (string.Equals(req.CoordinateSpace, "pixels", StringComparison.OrdinalIgnoreCase))
+                        {
+                            double winW = windowContent.ActualWidth;
+                            double winH = windowContent.ActualHeight;
+                            if (winW > 0) nx = req.X / winW;
+                            if (winH > 0) ny = req.Y / winH;
+                        }
+
                         match = ElementSearchHelper.HitTest(windowContent, nx, ny);
                         return Task.CompletedTask;
                     }).ConfigureAwait(false);
                 }
                 else
                 {
-                    match = ElementSearchHelper.HitTest(windowContent, nx, ny);
+                    var windowContent = _window.Content as FrameworkElement;
+                    if (windowContent != null)
+                    {
+                        if (string.Equals(req.CoordinateSpace, "pixels", StringComparison.OrdinalIgnoreCase))
+                        {
+                            double winW = windowContent.ActualWidth;
+                            double winH = windowContent.ActualHeight;
+                            if (winW > 0) nx = req.X / winW;
+                            if (winH > 0) ny = req.Y / winH;
+                        }
+                        match = ElementSearchHelper.HitTest(windowContent, nx, ny);
+                    }
                 }
 
                 if (match == null)
