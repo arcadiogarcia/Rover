@@ -4,7 +4,9 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using zRover.Core;
 using zRover.Core.Tools.Screenshot;
+using zRover.Core.Tools.InputInjection;
 using zRover.Core.Tools.UiTree;
+using System.Linq;
 using Windows.Foundation;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -66,6 +68,26 @@ namespace zRover.WinUI.Capabilities
                 "This tree-based approach is FAR more reliable than estimating pixel coordinates from screenshots.",
                 Schema,
                 GetUiTreeAsync);
+
+            registry.RegisterTool(
+                "find_element",
+                "Searches the XAML visual tree for elements matching the given criteria and returns their exact coordinates. " +
+                "Returns pre-computed centerX/centerY in normalized coordinates (0.0-1.0) — pass these directly to inject_tap with no math needed. " +
+                "This is MORE RELIABLE than estimating coordinates from screenshots. " +
+                "Supports searching by name (x:Name), automationName (AutomationProperties.Name), type (e.g. 'Button'), and text content. " +
+                "Use 'parent' to scope the search. Use 'timeout' to wait for dynamically appearing elements. " +
+                "Use 'all' to get all matches. For even simpler interaction, use tap_element which finds AND clicks in one step.",
+                ToolSchemas.FindElementSchema,
+                FindElementAsync);
+
+            registry.RegisterTool(
+                "hittest",
+                "Returns the UI element at the specified coordinates. " +
+                "Use this to verify what element is at a position BEFORE clicking — much more informative than validate_position which only draws a crosshair. " +
+                "Returns the element's name, type, automationName, text, bounds, and pre-computed centerX/centerY. " +
+                "Useful for confirming that your estimated coordinates actually land on the intended element.",
+                ToolSchemas.HitTestSchema,
+                HitTestAsync);
         }
 
         private async Task<string> GetUiTreeAsync(string argsJson)
@@ -181,6 +203,166 @@ namespace zRover.WinUI.Capabilities
             if (element is ContentControl cc && cc.Content is string s && !string.IsNullOrEmpty(s))
                 return s;
             return null;
+        }
+
+        private async Task<string> FindElementAsync(string argsJson)
+        {
+            try
+            {
+                var req = JsonConvert.DeserializeObject<FindElementRequest>(
+                    string.IsNullOrWhiteSpace(argsJson) ? "{}" : argsJson)
+                    ?? new FindElementRequest();
+
+                if (string.IsNullOrEmpty(req.Name) && string.IsNullOrEmpty(req.AutomationName) 
+                    && string.IsNullOrEmpty(req.TypeName) && string.IsNullOrEmpty(req.Text))
+                    return JsonConvert.SerializeObject(new FindElementResponse { Found = false, Error = "At least one of 'name', 'automationName', 'type', or 'text' is required." });
+
+                var windowContent = _window.Content as FrameworkElement;
+                if (windowContent == null)
+                    return JsonConvert.SerializeObject(new FindElementResponse { Found = false, Error = "Window content not available." });
+
+                var criteria = new ElementSearchHelper.SearchCriteria
+                {
+                    Name = req.Name,
+                    AutomationName = req.AutomationName,
+                    TypeName = req.TypeName,
+                    ParentName = req.Parent,
+                    Text = req.Text,
+                    All = req.All,
+                    Index = req.Index
+                };
+
+                List<ElementSearchHelper.ElementMatch> matches;
+                if (_context!.RunOnUiThread != null)
+                {
+                    matches = await ElementSearchHelper.FindElementsWithTimeoutAsync(
+                        _context.RunOnUiThread, windowContent, criteria, req.Timeout, req.Poll).ConfigureAwait(false);
+                }
+                else
+                {
+                    matches = ElementSearchHelper.FindElements(windowContent, criteria);
+                }
+
+                if (matches.Count == 0)
+                    return JsonConvert.SerializeObject(new FindElementResponse { Found = false, MatchCount = 0 });
+
+                if (req.All)
+                {
+                    var allMatches = matches.Select(m => new FindElementMatch
+                    {
+                        Name = m.Name,
+                        Type = m.Type,
+                        AutomationName = m.AutomationName,
+                        Text = m.Text,
+                        CenterX = m.CenterX,
+                        CenterY = m.CenterY,
+                        Bounds = m.Bounds,
+                        IsVisible = m.IsVisible,
+                        IsEnabled = m.IsEnabled
+                    }).ToList();
+
+                    return JsonConvert.SerializeObject(new FindElementResponse
+                    {
+                        Found = true,
+                        MatchCount = allMatches.Count,
+                        Matches = allMatches
+                    });
+                }
+
+                var first = matches[0];
+                return JsonConvert.SerializeObject(new FindElementResponse
+                {
+                    Found = true,
+                    Name = first.Name,
+                    Type = first.Type,
+                    AutomationName = first.AutomationName,
+                    Text = first.Text,
+                    CenterX = first.CenterX,
+                    CenterY = first.CenterY,
+                    Bounds = first.Bounds,
+                    IsVisible = first.IsVisible,
+                    IsEnabled = first.IsEnabled,
+                    MatchCount = matches.Count > 1 ? matches.Count : 1
+                });
+            }
+            catch (Exception ex)
+            {
+                return JsonConvert.SerializeObject(new FindElementResponse { Found = false, Error = ex.Message });
+            }
+        }
+
+        private async Task<string> HitTestAsync(string argsJson)
+        {
+            try
+            {
+                var req = JsonConvert.DeserializeObject<HitTestRequest>(
+                    string.IsNullOrWhiteSpace(argsJson) ? "{}" : argsJson)
+                    ?? new HitTestRequest();
+
+                var windowContent = _window.Content as FrameworkElement;
+                if (windowContent == null)
+                    return JsonConvert.SerializeObject(new HitTestResponse { Success = false, Error = "Window content not available." });
+
+                double nx = req.X, ny = req.Y;
+
+                // If pixels, convert to normalized
+                if (string.Equals(req.CoordinateSpace, "pixels", StringComparison.OrdinalIgnoreCase))
+                {
+                    double winW = 0, winH = 0;
+                    if (_context!.RunOnUiThread != null)
+                    {
+                        await _context.RunOnUiThread(() =>
+                        {
+                            winW = windowContent.ActualWidth;
+                            winH = windowContent.ActualHeight;
+                            return Task.CompletedTask;
+                        }).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        winW = windowContent.ActualWidth;
+                        winH = windowContent.ActualHeight;
+                    }
+
+                    if (winW > 0) nx = req.X / winW;
+                    if (winH > 0) ny = req.Y / winH;
+                }
+
+                ElementSearchHelper.ElementMatch? match = null;
+                if (_context!.RunOnUiThread != null)
+                {
+                    await _context.RunOnUiThread(() =>
+                    {
+                        match = ElementSearchHelper.HitTest(windowContent, nx, ny);
+                        return Task.CompletedTask;
+                    }).ConfigureAwait(false);
+                }
+                else
+                {
+                    match = ElementSearchHelper.HitTest(windowContent, nx, ny);
+                }
+
+                if (match == null)
+                    return JsonConvert.SerializeObject(new HitTestResponse { Success = false, Error = "No element found at the specified point." });
+
+                return JsonConvert.SerializeObject(new HitTestResponse
+                {
+                    Success = true,
+                    Type = match.Type,
+                    Name = match.Name,
+                    AutomationName = match.AutomationName,
+                    Text = match.Text,
+                    CenterX = match.CenterX,
+                    CenterY = match.CenterY,
+                    Bounds = match.Bounds,
+                    IsVisible = match.IsVisible,
+                    IsEnabled = match.IsEnabled
+                });
+            }
+            catch (Exception ex)
+            {
+                return JsonConvert.SerializeObject(new HitTestResponse { Success = false, Error = ex.Message });
+            }
         }
     }
 }

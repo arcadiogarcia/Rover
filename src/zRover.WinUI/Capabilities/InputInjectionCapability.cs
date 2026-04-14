@@ -7,6 +7,7 @@ using zRover.Core;
 using zRover.Core.Coordinates;
 using zRover.Core.Logging;
 using zRover.Core.Tools.InputInjection;
+using zRover.Core.Tools.UiTree;
 using Windows.Foundation;
 using System.Runtime.InteropServices;
 using Microsoft.UI;
@@ -217,6 +218,31 @@ namespace zRover.WinUI.Capabilities
                 "PREFER find_element to get exact start/end coordinates from the UI tree rather than estimating from screenshots.",
                 ToolSchemas.DragSchema,
                 InjectDragPathAsync);
+
+            registry.RegisterTool(
+                "tap_element",
+                "Finds a UI element by name, automationName, or type and taps its center. " +
+                "This is the MOST RELIABLE way to click UI elements — no coordinate estimation needed. " +
+                "The server resolves the element's exact position from the XAML visual tree and injects the tap automatically. " +
+                "Provide at least one of: name (x:Name), automationName (AutomationProperties.Name), or type (e.g. 'Button'). " +
+                "Use 'parent' to scope the search under a specific container. " +
+                "Use 'timeout' to wait for dynamically appearing elements (e.g. after navigation). " +
+                "Returns the matched element info and the exact coordinates where the tap was injected. " +
+                "Set dryRun=true to see where the tap would land without actually injecting.",
+                ToolSchemas.TapElementSchema,
+                TapElementAsync);
+
+            registry.RegisterTool(
+                "activate_element",
+                "Finds a UI element by name/type and activates it using XAML AutomationPeer patterns — NO coordinates needed. " +
+                "This uses the element's native automation support (Invoke for buttons, Toggle for checkboxes, Select for list items, " +
+                "Expand/Collapse for tree items and combo boxes). More reliable than coordinate-based tapping because " +
+                "it works even if the element is partially obscured or the window has moved. " +
+                "Falls back to tapping the element center if no matching automation pattern is available. " +
+                "Actions: 'invoke' (default — clicks buttons), 'toggle' (checkboxes/toggle buttons), " +
+                "'select' (list items), 'expand'/'collapse' (tree items, combo boxes), 'focus' (set keyboard focus).",
+                ToolSchemas.ActivateElementSchema,
+                ActivateElementAsync);
 
             RegisterKeyboardTools(registry);
             RegisterMouseTools(registry);
@@ -467,6 +493,282 @@ namespace zRover.WinUI.Capabilities
                 Device = req.Device
             };
             return JsonConvert.SerializeObject(response);
+        }
+
+        private async Task<string> TapElementAsync(string argsJson)
+        {
+            try
+            {
+                var req = JsonConvert.DeserializeObject<TapElementRequest>(argsJson)
+                          ?? new TapElementRequest();
+
+                if (string.IsNullOrEmpty(req.Name) && string.IsNullOrEmpty(req.AutomationName) && string.IsNullOrEmpty(req.TypeName))
+                    return JsonConvert.SerializeObject(new TapElementResponse { Success = false, Error = "At least one of 'name', 'automationName', or 'type' is required." });
+
+                var windowContent = _window?.Content as Microsoft.UI.Xaml.FrameworkElement;
+                if (windowContent == null)
+                    return JsonConvert.SerializeObject(new TapElementResponse { Success = false, Error = "Window content not available." });
+
+                var criteria = new ElementSearchHelper.SearchCriteria
+                {
+                    Name = req.Name,
+                    AutomationName = req.AutomationName,
+                    TypeName = req.TypeName,
+                    ParentName = req.Parent,
+                    Index = req.Index
+                };
+
+                List<ElementSearchHelper.ElementMatch> matches;
+                if (_runOnUiThread != null)
+                {
+                    matches = await ElementSearchHelper.FindElementsWithTimeoutAsync(
+                        _runOnUiThread, windowContent, criteria, req.Timeout, req.Poll).ConfigureAwait(false);
+                }
+                else
+                {
+                    matches = ElementSearchHelper.FindElements(windowContent, criteria);
+                }
+
+                if (matches.Count == 0)
+                {
+                    var searchDesc = req.Name != null ? $"name='{req.Name}'" :
+                                     req.AutomationName != null ? $"automationName='{req.AutomationName}'" :
+                                     $"type='{req.TypeName}'";
+                    return JsonConvert.SerializeObject(new TapElementResponse { Success = false, Error = $"Element not found: {searchDesc}" });
+                }
+
+                var match = matches[0];
+
+                // Now inject the tap at the element's center using the existing tap logic
+                var tapReq = new InjectTapRequest
+                {
+                    X = match.CenterX,
+                    Y = match.CenterY,
+                    CoordinateSpace = "normalized",
+                    Device = req.Device,
+                    Button = req.Button,
+                    DryRun = req.DryRun
+                };
+
+                // Delegate to existing InjectTapAsync
+                var tapResultJson = await InjectTapAsync(JsonConvert.SerializeObject(tapReq)).ConfigureAwait(false);
+
+                // Build enriched response
+                var response = new TapElementResponse
+                {
+                    Success = true,
+                    ElementName = match.Name,
+                    ElementType = match.Type,
+                    AutomationName = match.AutomationName,
+                    Bounds = match.Bounds,
+                    TappedAt = new zRover.Core.Tools.Screenshot.NormalizedRect
+                    {
+                        X = match.CenterX,
+                        Y = match.CenterY,
+                        Width = 0,
+                        Height = 0
+                    },
+                    Device = req.Device,
+                    DryRun = req.DryRun
+                };
+
+                return JsonConvert.SerializeObject(response);
+            }
+            catch (Exception ex)
+            {
+                return JsonConvert.SerializeObject(new TapElementResponse { Success = false, Error = ex.Message });
+            }
+        }
+
+        private async Task<string> ActivateElementAsync(string argsJson)
+        {
+            try
+            {
+                var req = JsonConvert.DeserializeObject<ActivateElementRequest>(argsJson)
+                          ?? new ActivateElementRequest();
+
+                if (string.IsNullOrEmpty(req.Name) && string.IsNullOrEmpty(req.AutomationName) && string.IsNullOrEmpty(req.TypeName))
+                    return JsonConvert.SerializeObject(new ActivateElementResponse { Success = false, Error = "At least one of 'name', 'automationName', or 'type' is required." });
+
+                var windowContent = _window?.Content as Microsoft.UI.Xaml.FrameworkElement;
+                if (windowContent == null)
+                    return JsonConvert.SerializeObject(new ActivateElementResponse { Success = false, Error = "Window content not available." });
+
+                var criteria = new ElementSearchHelper.SearchCriteria
+                {
+                    Name = req.Name,
+                    AutomationName = req.AutomationName,
+                    TypeName = req.TypeName,
+                    ParentName = req.Parent
+                };
+
+                List<ElementSearchHelper.ElementMatch> matches;
+                if (_runOnUiThread != null)
+                {
+                    matches = await ElementSearchHelper.FindElementsWithTimeoutAsync(
+                        _runOnUiThread, windowContent, criteria, req.Timeout, req.Poll).ConfigureAwait(false);
+                }
+                else
+                {
+                    matches = ElementSearchHelper.FindElements(windowContent, criteria);
+                }
+
+                if (matches.Count == 0)
+                {
+                    var searchDesc = req.Name != null ? $"name='{req.Name}'" :
+                                     req.AutomationName != null ? $"automationName='{req.AutomationName}'" :
+                                     $"type='{req.TypeName}'";
+                    return JsonConvert.SerializeObject(new ActivateElementResponse { Success = false, Error = $"Element not found: {searchDesc}" });
+                }
+
+                var match = matches[0];
+                string? method = null;
+                bool activated = false;
+                Exception? activationError = null;
+
+                // Try to activate via AutomationPeer on the UI thread
+                if (_runOnUiThread != null)
+                {
+                    await _runOnUiThread(() =>
+                    {
+                        try
+                        {
+                            (activated, method) = TryAutomationActivate(match.Element, req.Action);
+                        }
+                        catch (Exception ex)
+                        {
+                            activationError = ex;
+                        }
+                        return Task.CompletedTask;
+                    }).ConfigureAwait(false);
+                }
+                else
+                {
+                    try
+                    {
+                        (activated, method) = TryAutomationActivate(match.Element, req.Action);
+                    }
+                    catch (Exception ex)
+                    {
+                        activationError = ex;
+                    }
+                }
+
+                // If automation activation failed, fall back to tap
+                if (!activated && activationError == null)
+                {
+                    var tapReq = new InjectTapRequest
+                    {
+                        X = match.CenterX,
+                        Y = match.CenterY,
+                        CoordinateSpace = "normalized",
+                        Device = "touch"
+                    };
+                    await InjectTapAsync(JsonConvert.SerializeObject(tapReq)).ConfigureAwait(false);
+                    method = "tap_fallback";
+                    activated = true;
+                }
+
+                if (activationError != null)
+                    return JsonConvert.SerializeObject(new ActivateElementResponse { Success = false, Error = activationError.Message });
+
+                return JsonConvert.SerializeObject(new ActivateElementResponse
+                {
+                    Success = true,
+                    Method = method,
+                    ElementName = match.Name,
+                    ElementType = match.Type,
+                    AutomationName = match.AutomationName,
+                    Bounds = match.Bounds
+                });
+            }
+            catch (Exception ex)
+            {
+                return JsonConvert.SerializeObject(new ActivateElementResponse { Success = false, Error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Attempts to activate a XAML element via its AutomationPeer.
+        /// Returns (success, methodName). Must be called on the UI thread.
+        /// </summary>
+        private static (bool success, string? method) TryAutomationActivate(Microsoft.UI.Xaml.FrameworkElement element, string action)
+        {
+            var peer = Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.FromElement(element);
+            if (peer == null)
+            {
+                // Try creating a peer
+                peer = Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.CreatePeerForElement(element);
+            }
+            if (peer == null)
+                return (false, null);
+
+            action = action?.ToLowerInvariant() ?? "invoke";
+
+            switch (action)
+            {
+                case "invoke":
+                    if (peer.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.Invoke)
+                        is Microsoft.UI.Xaml.Automation.Provider.IInvokeProvider invoker)
+                    {
+                        invoker.Invoke();
+                        return (true, "IInvokeProvider.Invoke");
+                    }
+                    // Toggle buttons can also be "invoked" by toggling
+                    if (peer.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.Toggle)
+                        is Microsoft.UI.Xaml.Automation.Provider.IToggleProvider toggler2)
+                    {
+                        toggler2.Toggle();
+                        return (true, "IToggleProvider.Toggle (invoke fallback)");
+                    }
+                    break;
+
+                case "toggle":
+                    if (peer.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.Toggle)
+                        is Microsoft.UI.Xaml.Automation.Provider.IToggleProvider toggler)
+                    {
+                        toggler.Toggle();
+                        return (true, "IToggleProvider.Toggle");
+                    }
+                    break;
+
+                case "select":
+                    if (peer.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.SelectionItem)
+                        is Microsoft.UI.Xaml.Automation.Provider.ISelectionItemProvider selector)
+                    {
+                        selector.Select();
+                        return (true, "ISelectionItemProvider.Select");
+                    }
+                    break;
+
+                case "expand":
+                    if (peer.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.ExpandCollapse)
+                        is Microsoft.UI.Xaml.Automation.Provider.IExpandCollapseProvider expander)
+                    {
+                        expander.Expand();
+                        return (true, "IExpandCollapseProvider.Expand");
+                    }
+                    break;
+
+                case "collapse":
+                    if (peer.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.ExpandCollapse)
+                        is Microsoft.UI.Xaml.Automation.Provider.IExpandCollapseProvider collapser)
+                    {
+                        collapser.Collapse();
+                        return (true, "IExpandCollapseProvider.Collapse");
+                    }
+                    break;
+
+                case "focus":
+                    if (element is Microsoft.UI.Xaml.Controls.Control ctrl)
+                    {
+                        ctrl.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+                        return (true, "Control.Focus");
+                    }
+                    break;
+            }
+
+            return (false, null);
         }
 
         private async Task<string> InjectDragPathAsync(string argsJson)

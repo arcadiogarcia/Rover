@@ -22,7 +22,7 @@ namespace zRover.WinUI.Capabilities
         /// </summary>
         internal sealed class ElementMatch
         {
-            public FrameworkElement Element { get; set; }
+            public FrameworkElement Element { get; set; } = null!;
             public string Type { get; set; } = "";
             public string? Name { get; set; }
             public string? AutomationName { get; set; }
