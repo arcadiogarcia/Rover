@@ -146,7 +146,7 @@ namespace zRover.Uwp.Capabilities
                         injector.InjectMouseInput(new[] { new InjectedInputMouseInfo
                         {
                             MouseOptions = InjectedInputMouseOptions.Wheel,
-                            MouseData = (uint)req.DeltaY
+                            MouseData = unchecked((uint)req.DeltaY)
                         }});
                     }
 
@@ -156,7 +156,7 @@ namespace zRover.Uwp.Capabilities
                         injector.InjectMouseInput(new[] { new InjectedInputMouseInfo
                         {
                             MouseOptions = InjectedInputMouseOptions.HWheel,
-                            MouseData = (uint)req.DeltaX
+                            MouseData = unchecked((uint)req.DeltaX)
                         }});
                     }
                 }

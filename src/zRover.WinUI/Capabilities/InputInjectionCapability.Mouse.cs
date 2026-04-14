@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using System.Threading.Tasks;
@@ -14,6 +15,19 @@ namespace zRover.WinUI.Capabilities
         [DllImport("user32.dll")]
         private static extern int GetSystemMetrics(int nIndex);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumChildWindows(IntPtr hWnd, EnumChildProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
+
+        private delegate bool EnumChildProc(IntPtr hWnd, IntPtr lParam);
+
+        private const uint WM_MOUSEWHEEL = 0x020A;
+        private const uint WM_MOUSEHWHEEL = 0x020E;
         private const int SM_CXVIRTUALSCREEN = 78;
         private const int SM_CYVIRTUALSCREEN = 79;
 
@@ -110,17 +124,52 @@ namespace zRover.WinUI.Capabilities
         /// </summary>
         private (int normX, int normY) ToMouseNormalized(CoordinatePoint dipPoint, double dpiScale)
         {
-            // Convert DIP → raw physical pixels.
-            double rawX = dipPoint.X * dpiScale;
-            double rawY = dipPoint.Y * dpiScale;
-
-            // Use Win32 GetSystemMetrics to get virtual screen dimensions in raw pixels.
+            // dipPoint is in logical (DIP) screen-space coordinates.
+            // GetSystemMetrics without a per-monitor-aware context also returns logical
+            // (non-scaled) virtual-screen dimensions on hi-DPI displays. Since both the
+            // numerator and denominator are in the same logical unit, no DPI scaling is
+            // needed: normX = dipX / logicalVW * 65535.
+            //
+            // Derivation for MOUSEEVENTF_ABSOLUTE|VIRTUALDESK (which normalises over
+            // physical pixels): normX/65535 = physX/physVW = (dipX*S)/(logVW*S) = dipX/logVW.
             int vW = GetSystemMetrics(SM_CXVIRTUALSCREEN);
             int vH = GetSystemMetrics(SM_CYVIRTUALSCREEN);
 
-            int normX = vW > 0 ? (int)(rawX / vW * 65535) : 0;
-            int normY = vH > 0 ? (int)(rawY / vH * 65535) : 0;
+            int normX = vW > 0 ? (int)(dipPoint.X / vW * 65535) : 0;
+            int normY = vH > 0 ? (int)(dipPoint.Y / vH * 65535) : 0;
             return (normX, normY);
+        }
+
+        /// <summary>
+        /// PostMessages a wheel event directly to the XAML-bridge child HWNDs inside the main
+        /// WinUI 3 window. WinUI 3 desktop wraps XAML content in child HWNDs. Posting
+        /// WM_MOUSEWHEEL straight to those HWNDs bypasses the focus-based Win32 routing.
+        /// 
+        /// IMPORTANT: lParam must contain PHYSICAL pixel screen coordinates because the target
+        /// HWNDs are per-monitor DPI-aware. Use GetPhysicalDpiScale() to convert logical coords.
+        /// Returns true when the message was posted to at least one child.
+        /// </summary>
+        private bool PostScrollToXamlHwnd(IntPtr mainHwnd, uint msg, IntPtr wParam, IntPtr lParam)
+        {
+            var found = new List<IntPtr>();
+            EnumChildWindows(mainHwnd, (hWnd, _) =>
+            {
+                var sb = new System.Text.StringBuilder(256);
+                GetClassName(hWnd, sb, sb.Capacity);
+                string cls = sb.ToString();
+                LogToFile($"ChildHwnd class: {cls}");
+                // Target all HWNDs that are part of the WinUI 3 input/XAML stack
+                if (cls.Contains("Xaml") || cls.Contains("DesktopChildSite") ||
+                    cls.Contains("ContentBridge") || cls.Contains("InputSite"))
+                    found.Add(hWnd);
+                return true; // continue enumerating
+            }, IntPtr.Zero);
+
+            LogToFile($"PostScroll: found {found.Count} XAML child HWNDs");
+            foreach (var h in found)
+                PostMessage(h, msg, wParam, lParam);
+
+            return found.Count > 0;
         }
 
         private async Task<string> InjectMouseScrollAsync(string argsJson)
@@ -174,7 +223,10 @@ namespace zRover.WinUI.Capabilities
             }
 
             CoordinatePoint resolved = new CoordinatePoint(req.X, req.Y);
+            double dpiScale2 = 1;
             Exception? error = null;
+
+            // Resolve coordinates and move mouse on UI thread
             await _runOnUiThread(() =>
             {
                 try
@@ -182,10 +234,10 @@ namespace zRover.WinUI.Capabilities
                     ActivateWindow();
                     var space = ParseSpace(req.CoordinateSpace);
                     resolved = _resolver!.Resolve(new CoordinatePoint(req.X, req.Y), space);
-                    double dpiScale = GetDpiScale();
-                    var (normX, normY) = ToMouseNormalized(resolved, dpiScale);
+                    dpiScale2 = GetDpiScale();
+                    var (normX, normY) = ToMouseNormalized(resolved, dpiScale2);
 
-                    // Move mouse to position (VirtualDesk ensures correct placement on any monitor)
+                    // Move mouse cursor to the target position.
                     injector.InjectMouseInput(new[] { new InjectedInputMouseInfo
                     {
                         MouseOptions = InjectedInputMouseOptions.Move
@@ -195,29 +247,120 @@ namespace zRover.WinUI.Capabilities
                         DeltaY = normY
                     }});
 
-                    // Vertical scroll
-                    if (req.DeltaY != 0)
-                    {
-                        injector.InjectMouseInput(new[] { new InjectedInputMouseInfo
-                        {
-                            MouseOptions = InjectedInputMouseOptions.Wheel,
-                            MouseData = (uint)req.DeltaY
-                        }});
-                    }
-
-                    // Horizontal scroll
-                    if (req.DeltaX != 0)
-                    {
-                        injector.InjectMouseInput(new[] { new InjectedInputMouseInfo
-                        {
-                            MouseOptions = InjectedInputMouseOptions.HWheel,
-                            MouseData = (uint)req.DeltaX
-                        }});
-                    }
+                    LogToFile($"MouseScroll move: normX={normX} normY={normY} resolved=({resolved.X},{resolved.Y})");
                 }
                 catch (Exception ex) { error = ex; }
                 return Task.CompletedTask;
             }).ConfigureAwait(false);
+
+            if (error == null)
+            {
+                // ── Primary: Async touch pan (WinUI 3 / pointer-based apps) ──────────────
+                // WinUI 3 routes input through WM_POINTER*, not legacy WM_MOUSEWHEEL.
+                // Use a slow touch pan (30 ms/step, 10 steps) to stay below the
+                // ScrollViewer's inertia-fling threshold, giving proportional scrolling.
+                // WHEEL_DELTA=120 per standard notch → 30 DIP pan distance per notch.
+                double physScale = GetPhysicalDpiScale();
+                const double dipPerNotch = 30.0;
+                double scrollDipY = req.DeltaY / 120.0 * dipPerNotch;
+                double scrollDipX = req.DeltaX / 120.0 * dipPerNotch;
+
+                if (scrollDipY != 0 || scrollDipX != 0)
+                {
+                    const int steps = 10;
+                    const int stepDelayMs = 30;
+                    const int cs = 5;
+                    const uint tid = 99u;
+                    int startPhysX = (int)(resolved.X * physScale);
+                    int startPhysY = (int)(resolved.Y * physScale);
+                    int endPhysX   = (int)((resolved.X + scrollDipX) * physScale);
+                    int endPhysY   = (int)((resolved.Y + scrollDipY) * physScale);
+
+                    // PointerDown
+                    await _runOnUiThread!(() =>
+                    {
+                        injector.InitializeTouchInjection(InjectedInputVisualizationMode.Default);
+                        injector.InjectTouchInput(new[] { new InjectedInputTouchInfo
+                        {
+                            Contact = new InjectedInputRectangle { Top = -cs, Bottom = cs, Left = -cs, Right = cs },
+                            PointerInfo = new InjectedInputPointerInfo
+                            {
+                                PointerId = tid,
+                                PointerOptions = InjectedInputPointerOptions.PointerDown
+                                               | InjectedInputPointerOptions.InRange
+                                               | InjectedInputPointerOptions.InContact
+                                               | InjectedInputPointerOptions.New
+                                               | InjectedInputPointerOptions.Primary,
+                                PixelLocation = new InjectedInputPoint { PositionX = startPhysX, PositionY = startPhysY }
+                            }
+                        }});
+                        return Task.CompletedTask;
+                    }).ConfigureAwait(false);
+
+                    // Intermediate PointerUpdate frames with delays (controls velocity)
+                    for (int i = 1; i <= steps; i++)
+                    {
+                        await Task.Delay(stepDelayMs).ConfigureAwait(false);
+                        double f = (double)i / steps;
+                        int interpX = (int)(startPhysX + (endPhysX - startPhysX) * f);
+                        int interpY = (int)(startPhysY + (endPhysY - startPhysY) * f);
+                        await _runOnUiThread!(() =>
+                        {
+                            injector.InjectTouchInput(new[] { new InjectedInputTouchInfo
+                            {
+                                Contact = new InjectedInputRectangle { Top = -cs, Bottom = cs, Left = -cs, Right = cs },
+                                PointerInfo = new InjectedInputPointerInfo
+                                {
+                                    PointerId = tid,
+                                    PointerOptions = InjectedInputPointerOptions.Update
+                                                   | InjectedInputPointerOptions.InRange
+                                                   | InjectedInputPointerOptions.InContact,
+                                    PixelLocation = new InjectedInputPoint { PositionX = interpX, PositionY = interpY }
+                                }
+                            }});
+                            return Task.CompletedTask;
+                        }).ConfigureAwait(false);
+                    }
+
+                    // PointerUp
+                    await _runOnUiThread!(() =>
+                    {
+                        injector.InjectTouchInput(new[] { new InjectedInputTouchInfo
+                        {
+                            Contact = new InjectedInputRectangle { Top = -cs, Bottom = cs, Left = -cs, Right = cs },
+                            PointerInfo = new InjectedInputPointerInfo
+                            {
+                                PointerId = tid,
+                                PointerOptions = InjectedInputPointerOptions.PointerUp
+                                               | InjectedInputPointerOptions.InRange,
+                                PixelLocation = new InjectedInputPoint { PositionX = endPhysX, PositionY = endPhysY }
+                            }
+                        }});
+                        injector.UninitializeTouchInjection();
+                        return Task.CompletedTask;
+                    }).ConfigureAwait(false);
+
+                    LogToFile($"TouchPanScroll: ({startPhysX},{startPhysY}) → ({endPhysX},{endPhysY}) steps={steps} delay={stepDelayMs}ms/step");
+                }
+
+                // ── Secondary: Mouse wheel injection (legacy Win32 apps) ───────────────────
+                var mainHwnd = WinRT.Interop.WindowNative.GetWindowHandle(_window!);
+                double physScaleW = GetPhysicalDpiScale();
+                int physX = (int)(resolved.X * physScaleW);
+                int physY = (int)(resolved.Y * physScaleW);
+                if (req.DeltaY != 0)
+                {
+                    IntPtr wp = new IntPtr(unchecked((int)(((uint)(req.DeltaY & 0xFFFF)) << 16)));
+                    IntPtr lp = new IntPtr(unchecked((int)(((uint)(physY & 0xFFFF)) << 16 | (uint)(physX & 0xFFFF))));
+                    await _runOnUiThread!(() => { PostScrollToXamlHwnd(mainHwnd, WM_MOUSEWHEEL, wp, lp); return Task.CompletedTask; }).ConfigureAwait(false);
+                }
+                if (req.DeltaX != 0)
+                {
+                    IntPtr wp = new IntPtr(unchecked((int)(((uint)(req.DeltaX & 0xFFFF)) << 16)));
+                    IntPtr lp = new IntPtr(unchecked((int)(((uint)(physY & 0xFFFF)) << 16 | (uint)(physX & 0xFFFF))));
+                    await _runOnUiThread!(() => { PostScrollToXamlHwnd(mainHwnd, WM_MOUSEHWHEEL, wp, lp); return Task.CompletedTask; }).ConfigureAwait(false);
+                }
+            }
 
             if (error != null)
                 LogToFile($"MouseScroll FAILED: {error.Message}");
