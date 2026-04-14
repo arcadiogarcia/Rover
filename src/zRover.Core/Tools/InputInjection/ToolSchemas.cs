@@ -257,5 +257,59 @@ namespace zRover.Core.Tools.InputInjection
     ""pointerId"": { ""type"": ""integer"", ""default"": 1, ""description"": ""Pointer ID of the active pointer to release. When the last touch pointer is released the touch injection session is torn down."" }
   }
 }";
+
+        public const string TapElementSchema = @"{
+  ""type"": ""object"",
+  ""properties"": {
+    ""name"": { ""type"": ""string"", ""description"": ""Element x:Name to match (substring, case-insensitive)."" },
+    ""automationName"": { ""type"": ""string"", ""description"": ""AutomationProperties.Name to match (substring, case-insensitive)."" },
+    ""type"": { ""type"": ""string"", ""description"": ""XAML element type name (e.g. 'Button', 'TextBlock', 'TextBox'). Exact match, case-insensitive."" },
+    ""parent"": { ""type"": ""string"", ""description"": ""Optional parent element name to scope the search under."" },
+    ""index"": { ""type"": ""integer"", ""default"": -1, ""description"": ""0-based index when multiple elements match. -1 (default) returns the first match."" },
+    ""device"": { ""type"": ""string"", ""enum"": [""touch"", ""mouse""], ""default"": ""touch"" },
+    ""button"": { ""type"": ""string"", ""enum"": [""left"", ""right""], ""default"": ""left"" },
+    ""dryRun"": { ""type"": ""boolean"", ""default"": false, ""description"": ""If true, shows where the tap would land but does NOT inject input."" },
+    ""timeout"": { ""type"": ""integer"", ""default"": 0, ""description"": ""Milliseconds to wait for the element to appear. 0 = no wait."" },
+    ""poll"": { ""type"": ""integer"", ""default"": 500, ""description"": ""Polling interval in ms during timeout."" }
+  }
+}";
+
+        public const string FindElementSchema = @"{
+  ""type"": ""object"",
+  ""properties"": {
+    ""name"": { ""type"": ""string"", ""description"": ""Element x:Name to match (substring, case-insensitive)."" },
+    ""automationName"": { ""type"": ""string"", ""description"": ""AutomationProperties.Name to match (substring, case-insensitive)."" },
+    ""type"": { ""type"": ""string"", ""description"": ""XAML element type name (e.g. 'Button', 'TextBlock'). Exact match, case-insensitive."" },
+    ""parent"": { ""type"": ""string"", ""description"": ""Optional parent element name to scope the search under."" },
+    ""text"": { ""type"": ""string"", ""description"": ""Text content to match (substring, case-insensitive). Matches TextBlock.Text, TextBox.Text, or ContentControl string content."" },
+    ""all"": { ""type"": ""boolean"", ""default"": false, ""description"": ""If true, returns all matching elements in a 'matches' array."" },
+    ""index"": { ""type"": ""integer"", ""default"": -1, ""description"": ""0-based index when multiple elements match. -1 (default) returns the first match."" },
+    ""timeout"": { ""type"": ""integer"", ""default"": 0, ""description"": ""Milliseconds to wait for the element to appear. 0 = no wait."" },
+    ""poll"": { ""type"": ""integer"", ""default"": 500, ""description"": ""Polling interval in ms during timeout."" }
+  }
+}";
+
+        public const string HitTestSchema = @"{
+  ""type"": ""object"",
+  ""properties"": {
+    ""x"": { ""type"": ""number"", ""description"": ""X coordinate. In normalized space (default): 0.0 (left) to 1.0 (right)."" },
+    ""y"": { ""type"": ""number"", ""description"": ""Y coordinate. In normalized space (default): 0.0 (top) to 1.0 (bottom)."" },
+    ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"" }
+  },
+  ""required"": [""x"", ""y""]
+}";
+
+        public const string ActivateElementSchema = @"{
+  ""type"": ""object"",
+  ""properties"": {
+    ""name"": { ""type"": ""string"", ""description"": ""Element x:Name to match (substring, case-insensitive)."" },
+    ""automationName"": { ""type"": ""string"", ""description"": ""AutomationProperties.Name to match (substring, case-insensitive)."" },
+    ""type"": { ""type"": ""string"", ""description"": ""XAML element type name (e.g. 'Button', 'CheckBox'). Exact match, case-insensitive."" },
+    ""parent"": { ""type"": ""string"", ""description"": ""Optional parent element name to scope the search under."" },
+    ""action"": { ""type"": ""string"", ""enum"": [""invoke"", ""toggle"", ""select"", ""expand"", ""collapse"", ""focus""], ""default"": ""invoke"", ""description"": ""Action to perform via XAML AutomationPeer. 'invoke' clicks buttons, 'toggle' toggles checkboxes/toggle buttons, 'select' selects list items, 'expand'/'collapse' for expandable controls, 'focus' sets keyboard focus."" },
+    ""timeout"": { ""type"": ""integer"", ""default"": 0, ""description"": ""Milliseconds to wait for the element to appear. 0 = no wait."" },
+    ""poll"": { ""type"": ""integer"", ""default"": 500, ""description"": ""Polling interval in ms during timeout."" }
+  }
+}";
     }
 }
