@@ -5,11 +5,11 @@ namespace zRover.Core.Tools.InputInjection
         public const string TapSchema = @"{
   ""type"": ""object"",
   ""properties"": {
-    ""x"": { ""type"": ""number"", ""description"": ""X coordinate. In the default normalized space this is 0.0 (left) to 1.0 (right)."" },
-    ""y"": { ""type"": ""number"", ""description"": ""Y coordinate. In the default normalized space this is 0.0 (top) to 1.0 (bottom)."" },
+    ""x"": { ""type"": ""number"", ""description"": ""X coordinate. In normalized space (default): 0.0 (left) to 1.0 (right). Think of this as a percentage — 0.33 means '33% across the window'. Prefer getting exact values from find_element or get_ui_tree bounds over estimating from screenshots."" },
+    ""y"": { ""type"": ""number"", ""description"": ""Y coordinate. In normalized space (default): 0.0 (top) to 1.0 (bottom). Think of this as a percentage — 0.50 means 'halfway down the window'. Prefer getting exact values from find_element or get_ui_tree bounds over estimating from screenshots."" },
     ""coordinateSpace"": { ""type"": ""string"", ""enum"": [""normalized"", ""pixels""], ""default"": ""normalized"", ""description"": ""Coordinate space: 'normalized' (default, 0.0-1.0 relative to window size) or 'pixels' (render pixels, matching windowWidth/windowHeight from capture_current_view)."" },
     ""device"": { ""type"": ""string"", ""enum"": [""touch"", ""mouse""], ""default"": ""touch"" },
-    ""dryRun"": { ""type"": ""boolean"", ""default"": false, ""description"": ""If true, captures an annotated screenshot showing where the tap would land but does NOT actually inject the input. Use this to verify coordinates before committing."" }
+    ""dryRun"": { ""type"": ""boolean"", ""default"": false, ""description"": ""If true, captures an annotated screenshot showing where the tap would land but does NOT actually inject the input. ALWAYS use dryRun=true when using estimated coordinates (not from find_element or get_ui_tree) to verify before committing."" }
   },
   ""required"": [""x"", ""y""]
 }";

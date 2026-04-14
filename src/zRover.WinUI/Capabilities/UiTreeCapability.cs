@@ -54,14 +54,16 @@ namespace zRover.WinUI.Capabilities
         {
             registry.RegisterTool(
                 "get_ui_tree",
-                "Returns the XAML visual tree of the running WinUI 3 app as a JSON hierarchy. " +
-                "Each node includes: 'type' (XAML class name e.g. Button, TextBlock, Grid), " +
+                "**Primary tool for understanding UI layout and locating click targets.** " +
+                "Returns the XAML visual tree as a JSON hierarchy. Each node includes: " +
+                "'type' (XAML class name e.g. Button, TextBlock, Grid), " +
                 "'name' (x:Name), 'automationName' (AutomationProperties.Name), " +
                 "'text' (text content for TextBlock/TextBox/ContentControl), " +
                 "'bounds' (normalized 0.0–1.0 rect relative to the app window — same coordinate space as inject_tap), " +
                 "'isVisible', 'isEnabled', and 'children'. " +
-                "Use this to locate UI elements by name or type and extract their exact bounds for input injection, " +
-                "without relying on screenshot pixel estimation.",
+                "To click an element: compute its center from bounds (centerX = bounds.x + bounds.width/2, centerY = bounds.y + bounds.height/2) and pass to inject_tap. " +
+                "For simpler targeting, use tap_element (clicks by name/type directly) or find_element (returns pre-computed centerX/centerY). " +
+                "This tree-based approach is FAR more reliable than estimating pixel coordinates from screenshots.",
                 Schema,
                 GetUiTreeAsync);
         }

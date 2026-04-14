@@ -198,11 +198,12 @@ namespace zRover.WinUI.Capabilities
             registry.RegisterTool(
                 "inject_tap",
                 "Injects a tap/touch event at the specified coordinates. " +
-                "Returns an annotated screenshot showing the tap location BEFORE the input is injected, " +
-                "so you can verify the target. The crosshair marker is drawn with contrasting colors for visibility. " +
-                "Set dryRun=true to preview the tap location without actually injecting input. " +
-                "Use coordinateSpace='normalized' (default, 0.0-1.0 relative to window) or 'pixels' (render pixels matching windowWidth/windowHeight from capture_current_view). " +
-                "Use capture_current_view first to see the UI layout.",
+                "PREFER tap_element (by name/type) or find_element (returns exact centerX/centerY) over manual coordinates — they eliminate coordinate guessing errors. " +
+                "If you must use coordinates: get them from get_ui_tree bounds (center = bounds.x + bounds.width/2, bounds.y + bounds.height/2), NOT from eyeballing screenshots. " +
+                "Normalized coordinates map directly to percentages: x=0.33 means '33% across the window'. " +
+                "Returns an annotated screenshot showing the tap location BEFORE injection so you can verify. " +
+                "Set dryRun=true to preview without injecting. " +
+                "Use coordinateSpace='normalized' (default, 0.0-1.0 relative to window) or 'pixels' (render pixels matching windowWidth/windowHeight from capture_current_view).",
                 ToolSchemas.TapSchema,
                 InjectTapAsync);
 
@@ -213,7 +214,7 @@ namespace zRover.WinUI.Capabilities
                 "with the start point (green circle), path (cyan line), waypoints (yellow dots), and end point (red diamond) visualized. " +
                 "Set dryRun=true to preview the drag path without actually injecting input. " +
                 "Use coordinateSpace='normalized' (default, 0.0-1.0 relative to window) or 'pixels' (render pixels matching windowWidth/windowHeight from capture_current_view). " +
-                "Use capture_current_view first to see the UI layout.",
+                "PREFER find_element to get exact start/end coordinates from the UI tree rather than estimating from screenshots.",
                 ToolSchemas.DragSchema,
                 InjectDragPathAsync);
 

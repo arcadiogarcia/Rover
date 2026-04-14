@@ -71,7 +71,8 @@ namespace zRover.Uwp.Capabilities
                 "Use windowWidth/windowHeight as the coordinate space for coordinateSpace='pixels' injection. " +
                 "To convert a pixel position (px, py) in the bitmap to normalized coordinates: x = px / bitmapWidth, y = py / bitmapHeight. " +
                 "To use pixels directly with injection: scale by windowWidth/bitmapWidth first if the bitmap was resized. " +
-                "If you are unsure about precise element positions, use capture_region to zoom into a smaller area and verify before interacting.",
+                "If you are unsure about precise element positions, use capture_region to zoom into a smaller area and verify before interacting." +
+                " For locating click targets, prefer get_ui_tree, find_element, or tap_element over visual coordinate estimation from this screenshot.",
                 CaptureSchema,
                 CaptureAsync);
 
@@ -80,7 +81,8 @@ namespace zRover.Uwp.Capabilities
                 "Captures the current app window and draws a high-visibility crosshair marker at the specified normalized coordinates."+
                 " Use this BEFORE calling inject_tap or inject_drag_path to visually confirm that your estimated coordinates land on the intended UI element. " +
                 "The crosshair is drawn with contrasting black and cyan outlines so it is visible on any background. " +
-                "Returns the annotated screenshot file path and the marker position.",
+                "Returns the annotated screenshot file path and the marker position." +
+                " For identifying what element is at a position, also consider hittest which returns the element's name, type, and bounds.",
                 ValidatePositionSchema,
                 ValidatePositionAsync);
 
@@ -96,7 +98,8 @@ namespace zRover.Uwp.Capabilities
                 "COORDINATE CONVERSION: The response includes fullWidth/fullHeight (the full screenshot dimensions) and the normalizedRegion you requested. " +
                 "To convert a pixel position (px, py) within the cropped image to normalized coordinates for injection: " +
                 "normalizedX = region.x + (px / windowWidth), normalizedY = region.y + (py / windowHeight), " +
-                "where windowWidth/windowHeight are from capture_current_view.",
+                "where windowWidth/windowHeight are from capture_current_view." +
+                " NOTE: For precise element targeting, find_element or tap_element gives exact coordinates without visual estimation.",
 
                 RegionSchema,
                 CaptureRegionAsync);
