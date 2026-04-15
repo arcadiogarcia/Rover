@@ -108,6 +108,11 @@
                         <TextBlock x:Name="ExternalUrlText" Opacity="0.7" IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
                         <Button x:Name="CopyLinkButton" Content="Copy connection link" Click="OnCopyLinkClicked"/>
                         <TextBlock x:Name="ExternalTokenText" Opacity="0.5" FontSize="11" IsTextSelectionEnabled="True" TextWrapping="Wrap"/>
+                        <Image x:Name="QrCodeImage"
+                               Width="200" Height="200"
+                               Margin="0,8,0,0"
+                               HorizontalAlignment="Left"
+                               Stretch="Uniform"/>
                     </StackPanel>
                 </StackPanel>
 

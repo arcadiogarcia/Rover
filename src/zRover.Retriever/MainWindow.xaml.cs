@@ -4,7 +4,10 @@ using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using QRCoder;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage.Streams;
 using zRover.Retriever.Packages;
 using zRover.Retriever.Server;
 using zRover.Retriever.Sessions;
@@ -130,7 +133,40 @@ public sealed partial class MainWindow : Window
         {
             ExternalUrlText.Text = $"External URL: {_external.ExternalUrl}";
             ExternalTokenText.Text = $"Token: {_external.BearerToken}";
+            _ = UpdateQrCodeAsync(_external.GetConnectionLink());
         }
+        else
+        {
+            QrCodeImage.Source = null;
+        }
+    }
+
+    private async Task UpdateQrCodeAsync(string? link)
+    {
+        if (string.IsNullOrEmpty(link)) return;
+
+        // Generate PNG bytes off the UI thread
+        byte[] pngBytes = await Task.Run(() =>
+        {
+            using var qrGenerator = new QRCodeGenerator();
+            using var qrData      = qrGenerator.CreateQrCode(link, QRCodeGenerator.ECCLevel.M);
+            var code              = new PngByteQRCode(qrData);
+            return code.GetGraphic(8, darkColorRgba: new byte[] { 0, 0, 0, 255 },
+                                      lightColorRgba: new byte[] { 255, 255, 255, 255 });
+        });
+
+        // Decode into a BitmapImage on the UI thread
+        using var stream = new InMemoryRandomAccessStream();
+        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+        {
+            writer.WriteBytes(pngBytes);
+            await writer.StoreAsync();
+        }
+        stream.Seek(0);
+
+        var bitmap = new BitmapImage();
+        await bitmap.SetSourceAsync(stream);
+        QrCodeImage.Source = bitmap;
     }
 
     private async void OnExternalToggled(object sender, RoutedEventArgs e)
