@@ -122,6 +122,9 @@ public class Program
             pkgInstall,
             pkgLogger);
 
+        var selfUpdateLogger = webApp.Services.GetRequiredService<ILoggerFactory>().CreateLogger("SelfUpdate");
+        SelfUpdateTools.Register(adapter, selfUpdateLogger);
+
         var mcpOptions = webApp.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<McpServerOptions>>().Value;
         mcpOptions.ToolCollection = adapter.Tools;
 
