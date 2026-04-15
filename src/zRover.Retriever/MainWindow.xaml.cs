@@ -29,6 +29,9 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = "zRover Retriever";
 
+        var v = Windows.ApplicationModel.Package.Current.Id.Version;
+        AppVersionText.Text = $"v{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
+
         var services = App.Services!;
         _registry = services.GetRequiredService<SessionRegistry>();
         _managers = services.GetRequiredService<RemoteManagerRegistry>();

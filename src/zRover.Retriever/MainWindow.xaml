@@ -11,9 +11,16 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <TextBlock Grid.Row="0"
-                   Text="zRover Retriever"
-                   Style="{StaticResource TitleTextBlockStyle}"/>
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <TextBlock Text="zRover Retriever"
+                       Style="{StaticResource TitleTextBlockStyle}"/>
+            <TextBlock x:Name="AppVersionText"
+                       Text=""
+                       Style="{StaticResource SubtitleTextBlockStyle}"
+                       Opacity="0.5"
+                       VerticalAlignment="Bottom"
+                       Margin="0,0,0,3"/>
+        </StackPanel>
 
         <!-- Two-column body -->
         <Grid Grid.Row="1" ColumnSpacing="32" Margin="32">
