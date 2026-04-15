@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.Features;
 using zRover.Retriever.Packages;
 
 namespace zRover.Retriever.Server;
@@ -27,6 +28,11 @@ public static class PackageStagingEndpoint
             HttpRequest request,
             CancellationToken ct) =>
         {
+            // Lift Kestrel's default 30 MB body-size limit for this endpoint.
+            var bodySizeFeature = request.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            if (bodySizeFeature is { IsReadOnly: false })
+                bodySizeFeature.MaxRequestBodySize = null;
+
             // Reject excessively large uploads early (before reading the body)
             if (request.ContentLength.HasValue &&
                 request.ContentLength.Value > PackageStagingManager.MaxFileSizeBytes)
@@ -69,6 +75,6 @@ public static class PackageStagingEndpoint
                 stagingId = result.StagingId!,
                 sizeBytes = result.SizeBytes!.Value,
             });
-        }).DisableRequestSizeLimit();
+        });
     }
 }
