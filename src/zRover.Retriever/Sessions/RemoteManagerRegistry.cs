@@ -189,9 +189,18 @@ public sealed class RemoteManagerRegistry : IDisposable
         return managerId;
     }
 
-    /// <summary>Disconnects from a remote manager and removes all its propagated sessions.</summary>
-    public async Task DisconnectAsync(string managerId)
+    /// <summary>
+    /// Returns the URL, bearer token and alias for every currently connected manager.
+    /// Used by the settings layer to persist "past remote retrievers" for reconnect.
+    /// </summary>
+    public IReadOnlyList<(string McpUrl, string? BearerToken, string Alias)> GetSaveableManagers()
     {
+        lock (_lock)
+            return _managers.Values.Select(c => (c.McpUrl, c.BearerToken, c.Alias)).ToList();
+    }
+
+    /// <summary>Disconnects from a remote manager and removes all its propagated sessions.</summary>
+    public async Task DisconnectAsync(string managerId)    {
         RemoteManagerConnection? connection;
         lock (_lock)
         {

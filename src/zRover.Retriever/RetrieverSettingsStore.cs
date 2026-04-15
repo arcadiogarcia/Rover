@@ -65,4 +65,16 @@ public sealed class RetrieverSettings
     public int ExternalPort { get; set; } = 5201;
     public string? ExternalBearerToken { get; set; }
     public bool PackageInstallEnabled { get; set; }
+    public List<SavedRemoteManager> SavedRemoteManagers { get; set; } = [];
+}
+
+/// <summary>
+/// Persisted record for a remote Retriever that was previously connected.
+/// Enables one-click reconnect across restarts and updates.
+/// </summary>
+public sealed class SavedRemoteManager
+{
+    public string McpUrl { get; set; } = "";
+    public string? BearerToken { get; set; }
+    public string Alias { get; set; } = "";
 }

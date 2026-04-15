@@ -130,18 +130,20 @@ public class Program
 
         // ── Restore persisted settings ────────────────────────────────────────────
         var settingsStore  = webApp.Services.GetRequiredService<RetrieverSettingsStore>();
-        var savedSettings  = settingsStore.Load();
+        // lastSaved is mutated on every save so the ExternalBearerToken is not
+        // accidentally overwritten by old startup values when external is toggled off.
+        var lastSaved = settingsStore.Load();
 
-        if (savedSettings.ExternalEnabled)
+        if (lastSaved.ExternalEnabled)
         {
             _ = Task.Run(async () =>
             {
-                try { await extAccess.EnableAsync(savedSettings.ExternalPort, savedSettings.ExternalBearerToken); }
+                try { await extAccess.EnableAsync(lastSaved.ExternalPort, lastSaved.ExternalBearerToken); }
                 catch { /* logged inside EnableAsync */ }
             });
         }
 
-        if (savedSettings.PackageInstallEnabled)
+        if (lastSaved.PackageInstallEnabled)
         {
             _ = Task.Run(async () =>
             {
@@ -150,20 +152,50 @@ public class Program
             });
         }
 
-        // Save whenever either manager changes state
-        void SaveCurrentSettings()
+        // Attempt to reconnect all previously-known remote retrievers in the background.
+        foreach (var saved in lastSaved.SavedRemoteManagers)
         {
-            settingsStore.Save(new RetrieverSettings
+            var url   = saved.McpUrl;
+            var token = saved.BearerToken;
+            var alias = saved.Alias;
+            _ = Task.Run(async () =>
             {
-                ExternalEnabled      = extAccess.IsEnabled,
-                ExternalPort         = extAccess.IsEnabled ? extAccess.Port : savedSettings.ExternalPort,
-                ExternalBearerToken  = extAccess.BearerToken ?? savedSettings.ExternalBearerToken,
-                PackageInstallEnabled = pkgInstall.IsEnabled,
+                try { await remoteMgrs.ConnectAsync(url, token, alias); }
+                catch { /* silently ignored — will appear in past-managers list */ }
             });
         }
 
-        extAccess.StateChanged   += (_, _) => SaveCurrentSettings();
-        pkgInstall.StateChanged  += (_, _) => SaveCurrentSettings();
+        // Save whenever external access, package install, or remote managers change state.
+        void SaveCurrentSettings()
+        {
+            // Merge currently-connected managers into the persisted list so that
+            // managers that disconnect are kept for future one-click reconnect.
+            var currentConnections = remoteMgrs.GetSaveableManagers();
+            var mergedManagers = new List<SavedRemoteManager>(lastSaved.SavedRemoteManagers);
+            foreach (var (url, btoken, alias) in currentConnections)
+            {
+                var idx = mergedManagers.FindIndex(s => s.McpUrl == url);
+                if (idx < 0)
+                    mergedManagers.Add(new SavedRemoteManager { McpUrl = url, BearerToken = btoken, Alias = alias });
+                else
+                    mergedManagers[idx] = new SavedRemoteManager { McpUrl = url, BearerToken = btoken, Alias = alias };
+            }
+
+            var s = new RetrieverSettings
+            {
+                ExternalEnabled       = extAccess.IsEnabled,
+                ExternalPort          = extAccess.IsEnabled ? extAccess.Port : lastSaved.ExternalPort,
+                ExternalBearerToken   = extAccess.BearerToken ?? lastSaved.ExternalBearerToken,
+                PackageInstallEnabled = pkgInstall.IsEnabled,
+                SavedRemoteManagers   = mergedManagers,
+            };
+            settingsStore.Save(s);
+            lastSaved = s;   // keep in sync so the next save doesn't regress the token
+        }
+
+        extAccess.StateChanged    += (_, _) => SaveCurrentSettings();
+        pkgInstall.StateChanged   += (_, _) => SaveCurrentSettings();
+        remoteMgrs.ManagersChanged += (_, _) => SaveCurrentSettings();
 
         // ── Session registration endpoint ─────────────────────────────────────────
         webApp.MapPost("/sessions/register", async (

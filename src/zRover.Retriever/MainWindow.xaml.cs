@@ -22,6 +22,7 @@ public sealed partial class MainWindow : Window
     private readonly ExternalAccessManager _external;
     private readonly PackageInstallManager _packageInstall;
     private readonly IConfiguration _config;
+    private readonly RetrieverSettingsStore _settingsStore;
     private readonly DispatcherQueue _dispatcherQueue;
 
     public MainWindow()
@@ -38,6 +39,7 @@ public sealed partial class MainWindow : Window
         _external = services.GetRequiredService<ExternalAccessManager>();
         _packageInstall = services.GetRequiredService<PackageInstallManager>();
         _config = services.GetRequiredService<IConfiguration>();
+        _settingsStore = services.GetRequiredService<RetrieverSettingsStore>();
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
         _registry.SessionsChanged += OnSessionsChanged;
@@ -111,6 +113,15 @@ public sealed partial class MainWindow : Window
         ManagersList.ItemsSource = managerItems;
         ManagersList.Visibility = managerItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         NoManagersText.Visibility = managerItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        // Past remote retrievers: saved entries not currently connected
+        var connectedUrls = _managers.Managers.Select(m => m.McpUrl).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var pastItems = _settingsStore.Load().SavedRemoteManagers
+            .Where(s => !connectedUrls.Contains(s.McpUrl))
+            .Select(s => new PastManagerViewModel { McpUrl = s.McpUrl, BearerToken = s.BearerToken, Alias = s.Alias })
+            .ToList();
+        PastManagersList.ItemsSource = pastItems;
+        PastManagersPanel.Visibility = pastItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshExternalState();
         RefreshPackageInstallState();
@@ -198,6 +209,29 @@ public sealed partial class MainWindow : Window
         Clipboard.SetContent(dp);
     }
 
+    private async void OnReconnectManagerClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Microsoft.UI.Xaml.Controls.Button btn ||
+            btn.Tag is not PastManagerViewModel vm) return;
+
+        btn.IsEnabled = false;
+        try { await _managers.ConnectAsync(vm.McpUrl, vm.BearerToken, vm.Alias); }
+        catch { /* connection failed — stays in past list */ }
+        finally { btn.IsEnabled = true; }
+    }
+
+    private void OnForgetManagerClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Microsoft.UI.Xaml.Controls.Button btn ||
+            btn.Tag is not PastManagerViewModel vm) return;
+
+        var settings = _settingsStore.Load();
+        settings.SavedRemoteManagers.RemoveAll(s =>
+            string.Equals(s.McpUrl, vm.McpUrl, StringComparison.OrdinalIgnoreCase));
+        _settingsStore.Save(settings);
+        _dispatcherQueue.TryEnqueue(RefreshState);
+    }
+
     private async void OnDisconnectManagerClicked(object sender, RoutedEventArgs e)
     {
         if (sender is Microsoft.UI.Xaml.Controls.Button btn && btn.Tag is string managerId)
@@ -233,4 +267,13 @@ public class ManagerViewModel
     public SolidColorBrush StatusColor => IsConnected
         ? new SolidColorBrush(Colors.Green)
         : new SolidColorBrush(Colors.Red);
+}
+
+public class PastManagerViewModel
+{
+    public string McpUrl { get; set; } = "";
+    public string? BearerToken { get; set; }
+    public string Alias { get; set; } = "";
+
+    public string DisplayText => string.IsNullOrEmpty(Alias) ? McpUrl : $"{Alias} — {McpUrl}";
 }
