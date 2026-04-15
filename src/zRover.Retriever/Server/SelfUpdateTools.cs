@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Windows.ApplicationModel;
 using zRover.Core;
+using zRover.Retriever.Sessions;
 
 namespace zRover.Retriever.Server;
 
@@ -12,6 +13,9 @@ namespace zRover.Retriever.Server;
 /// Registers the <c>update_retriever</c> MCP tool, which fetches the latest
 /// release from GitHub, downloads the MSIX, installs it via PowerShell
 /// (which force-closes all running instances), and relaunches the app.
+///
+/// Supports federation: pass a <c>deviceId</c> to update any device reachable
+/// via the remote-manager chain, including multi-hop paths ("a1b2:c3d4").
 ///
 /// Prerequisites (satisfied by the normal first-run install):
 /// <list type="bullet">
@@ -30,20 +34,50 @@ public static class SelfUpdateTools
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static void Register(IMcpToolRegistry registry, ILogger logger)
+    public static void Register(
+        IMcpToolRegistry registry,
+        RemoteManagerRegistry remoteManagers,
+        ILogger logger)
     {
-        using var httpClient = BuildHttpClient();
-
         registry.RegisterTool(
             "update_retriever",
             "Checks GitHub for the latest zRover Retriever release and, if a newer version is " +
-            "available, downloads and installs it then restarts the Retriever. " +
-            "The signing certificate must already be trusted on this machine (it is installed " +
-            "during the initial setup). Returns immediately with the update status; the Retriever " +
-            "process will exit and relaunch automatically within a few seconds.",
-            """{"type":"object","properties":{}}""",
+            "available, downloads and installs it on the target device then restarts its Retriever. " +
+            "Supports federation: pass a deviceId (from list_devices) to update a remote device, " +
+            "including multi-hop paths (e.g. 'a1b2:c3d4'). Omit deviceId to update the local machine. " +
+            "The signing certificate must already be trusted on the target machine. " +
+            "Returns immediately with the update status; the Retriever process will exit and " +
+            "relaunch automatically within a few seconds.",
+            """
+            {
+              "type": "object",
+              "properties": {
+                "deviceId": {
+                  "type": "string",
+                  "description": "Target device ID from list_devices. Omit or pass null to update the local machine."
+                }
+              }
+            }
+            """,
             async argsJson =>
             {
+                // ── Route to remote device if deviceId is specified ────────────────────
+                using var doc = JsonDocument.Parse(argsJson);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("deviceId", out var devEl) &&
+                    devEl.ValueKind == JsonValueKind.String)
+                {
+                    var deviceId = devEl.GetString();
+                    if (!string.IsNullOrEmpty(deviceId) &&
+                        !deviceId.Equals("local", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Strip deviceId before forwarding so the remote hop acts locally
+                        var fwdArgs = BuildArgsWithoutDeviceId(root);
+                        return await remoteManagers.RouteDeviceToolAsync(
+                            deviceId, "update_retriever", fwdArgs, logger);
+                    }
+                }
+
                 // ── 1. Read current installed version ─────────────────────────────────
                 var currentPkg    = Package.Current;
                 var currentPkgVer = currentPkg.Id.Version;
@@ -209,6 +243,17 @@ public static class SelfUpdateTools
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static string BuildArgsWithoutDeviceId(JsonElement root)
+    {
+        var args = new Dictionary<string, object?>();
+        foreach (var prop in root.EnumerateObject())
+        {
+            if (prop.Name.Equals("deviceId", StringComparison.OrdinalIgnoreCase)) continue;
+            args[prop.Name] = prop.Value.Clone();
+        }
+        return JsonSerializer.Serialize(args);
+    }
 
     private static HttpClient BuildHttpClient()
     {

@@ -123,7 +123,7 @@ public class Program
             pkgLogger);
 
         var selfUpdateLogger = webApp.Services.GetRequiredService<ILoggerFactory>().CreateLogger("SelfUpdate");
-        SelfUpdateTools.Register(adapter, selfUpdateLogger);
+        SelfUpdateTools.Register(adapter, remoteMgrs, selfUpdateLogger);
 
         var mcpOptions = webApp.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<McpServerOptions>>().Value;
         mcpOptions.ToolCollection = adapter.Tools;
