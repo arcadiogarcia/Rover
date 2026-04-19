@@ -93,6 +93,18 @@ public sealed class PropagatedSession : IRoverSession
         return result;
     }
 
+    /// <summary>
+    /// Drops the cached tool list so the next <see cref="ListToolsAsync"/> call
+    /// re-fetches from the remote manager. Called when the remote publishes a
+    /// <c>tools/list_changed</c> notification, so newly added tools downstream
+    /// (e.g. capabilities that came online after the local Manager first cached
+    /// the list) propagate up the federation chain.
+    /// </summary>
+    internal void InvalidateToolsCache()
+    {
+        _cachedTools = null;
+    }
+
     public async Task<RoverToolResult> InvokeToolAsync(string toolName, string argsJson, CancellationToken cancellationToken = default)
     {
         // Step 1: Ensure this session is active on the remote manager

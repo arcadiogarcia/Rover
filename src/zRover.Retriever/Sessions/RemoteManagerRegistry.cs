@@ -103,11 +103,32 @@ public sealed class RemoteManagerRegistry : IDisposable
                             var conn = connectionRef.Value;
                             if (conn is null) return;
                             _logger.LogInformation(
-                                "Remote manager {ManagerId} signaled tools/list_changed — re-syncing",
+                                "Remote manager {ManagerId} signaled tools/list_changed — re-syncing sessions and re-merging tools",
                                 conn.ManagerId);
                             try
                             {
+                                // 1. Refresh the session list (apps may have come/gone).
                                 await SyncRemoteSessionsAsync(conn, ct);
+
+                                // 2. The remote's published tool catalog may have grown
+                                //    (e.g. a downstream app just registered with new
+                                //    capabilities). Drop cached tool lists on each
+                                //    propagated session and re-run proxy registration so
+                                //    those new tools surface in this Manager's catalog.
+                                List<string> idsToRefresh;
+                                lock (_lock)
+                                    idsToRefresh = conn.PropagatedSessionIds.ToList();
+
+                                foreach (var pid in idsToRefresh)
+                                {
+                                    var sess = _sessionRegistry.Sessions
+                                        .FirstOrDefault(s => s.SessionId == pid);
+                                    if (sess is PropagatedSession ps)
+                                    {
+                                        ps.InvalidateToolsCache();
+                                        await _activeSessionProxy.OnSessionRegisteredAsync(ps);
+                                    }
+                                }
                             }
                             catch (Exception ex)
                             {

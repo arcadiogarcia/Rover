@@ -12,10 +12,12 @@ namespace zRover.Retriever.Server;
 /// Responsibilities:
 /// <list type="bullet">
 ///   <item>
-///     On first session connection, fetches the tool skeleton from that session and
-///     registers forwarding proxies in the <see cref="McpToolRegistryAdapter"/>.
-///     All sessions are expected to expose identical tool sets (enforced by sharing
-///     the same zRover.Uwp SDK version).
+///     On every session registration (and on every remote re-publish via
+///     <c>tools/list_changed</c>), fetches that session's tool list and registers
+///     forwarding proxies for any tool name not yet present in the
+///     <see cref="McpToolRegistryAdapter"/>. The catalog is the union of every
+///     session's capability set, so federated remote sessions that expose tools
+///     local sessions don't (and vice-versa) are all reachable.
 ///   </item>
 ///   <item>
 ///     Every proxy tool delegates to <see cref="ISessionRegistry.ActiveSession"/> at
@@ -65,19 +67,23 @@ public sealed class ActiveSessionProxy
     }
 
     /// <summary>
-    /// Called when a new session registers. If proxy tools haven't been registered yet,
-    /// fetches the tool list from this session and initialises the proxy skeleton.
-    /// Tool schemas are fixed after first initialisation; subsequent sessions are assumed
-    /// to expose the same set (same SDK version).
+    /// Called when a session registers (or re-publishes its tool list). Fetches the
+    /// session's current tool list and merges any tools not yet present in the
+    /// adapter as forwarding proxies.
+    ///
+    /// This is intentionally idempotent and incremental:
+    /// <list type="bullet">
+    ///   <item>Sessions can join with disjoint capability sets — the union is published.</item>
+    ///   <item>A late-arriving session that exposes a tool no earlier session did
+    ///         (e.g. a federated <see cref="PropagatedSession"/> whose remote Manager
+    ///         only just gained a capability) contributes that tool to this Manager.</item>
+    ///   <item>Schemas of already-registered tools are not overwritten — first writer wins,
+    ///         consistent with the original "all sessions share the same SDK" assumption
+    ///         in the common case.</item>
+    /// </list>
     /// </summary>
     public async Task OnSessionRegisteredAsync(IRoverSession session)
     {
-        bool shouldInit;
-        lock (_initLock)
-            shouldInit = !_toolsInitialised;
-
-        if (!shouldInit) return;
-
         IReadOnlyList<DiscoveredTool> tools;
         try
         {
@@ -85,30 +91,42 @@ public sealed class ActiveSessionProxy
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to list tools from first registered session {SessionId}", session.SessionId);
+            _logger.LogError(ex, "Failed to list tools from session {SessionId}", session.SessionId);
             return;
         }
 
+        bool addedAny;
+        bool firstInit;
         lock (_initLock)
         {
-            if (_toolsInitialised) return; // another thread beat us here
-
-            // Filter out tools already registered by the device management layer
-            // (e.g. when a PropagatedSession returns the full remote tool list which
-            // includes list_devices, install_package, etc.).
-            // Also handles the race where a WinUI app registers before its MCP server
-            // has published any tools — in that case we skip and let the next session try.
+            // Filter out tools already registered (by the device management layer
+            // or by an earlier session). Also handles the race where a WinUI app
+            // registers before its MCP server has published any tools — in that
+            // case nothing is added and we wait for a later registration to retry.
             var newTools = tools.Where(t => !_adapter.IsToolRegistered(t.Name)).ToList();
 
             if (newTools.Count == 0)
             {
-                _logger.LogWarning(
-                    "Session {SessionId} ({DisplayName}) produced no new proxy tools (list was empty or all already registered). Will retry with the next session.",
-                    session.SessionId, session.Identity.DisplayName);
+                if (!_toolsInitialised)
+                {
+                    _logger.LogWarning(
+                        "Session {SessionId} ({DisplayName}) produced no new proxy tools (list was empty or all already registered). Will retry with the next session.",
+                        session.SessionId, session.Identity.DisplayName);
+                }
+                else
+                {
+                    _logger.LogDebug(
+                        "Session {SessionId} ({DisplayName}) added no new tools — adapter already covers its capabilities.",
+                        session.SessionId, session.Identity.DisplayName);
+                }
                 return;
             }
 
-            _logger.LogInformation("Initialising proxy tool skeleton from session {SessionId} ({DisplayName}): {Count} new tools ({Total} total from session)",
+            firstInit = !_toolsInitialised;
+            _logger.LogInformation(
+                firstInit
+                    ? "Initialising proxy tool skeleton from session {SessionId} ({DisplayName}): {Count} new tools ({Total} total from session)"
+                    : "Merging additional proxy tools from session {SessionId} ({DisplayName}): {Count} new tools ({Total} total from session)",
                 session.SessionId, session.Identity.DisplayName, newTools.Count, tools.Count);
 
             foreach (var tool in newTools)
@@ -120,9 +138,11 @@ public sealed class ActiveSessionProxy
             }
 
             _toolsInitialised = true;
+            addedAny = true;
         }
 
-        _adapter.NotifyToolsChanged();
+        if (addedAny)
+            _adapter.NotifyToolsChanged();
     }
 
     private async Task<RoverToolResult> ProxyInvokeAsync(string toolName, string argsJson)
