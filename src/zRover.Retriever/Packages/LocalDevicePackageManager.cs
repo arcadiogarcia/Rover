@@ -151,9 +151,20 @@ public sealed class LocalDevicePackageManager : IDevicePackageManager
             {
                 if (!_devCerts.IsReady)
                 {
-                    _logger.LogWarning("DevCertManager is not ready; skipping auto-sign. Package may fail with CERT_NOT_TRUSTED.");
+                    // Lazy init: create the cert and trust it (one-time UAC prompt). This
+                    // only fires the first time an unsigned package is installed — not on
+                    // toggle or startup restore — so users do not see UAC after every update.
+                    try
+                    {
+                        await _devCerts.EnsureReadyAsync(ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Dev cert initialisation failed — package may fail with CERT_NOT_TRUSTED");
+                    }
                 }
-                else
+
+                if (_devCerts.IsReady)
                 {
                     try
                     {
@@ -165,6 +176,10 @@ public sealed class LocalDevicePackageManager : IDevicePackageManager
                         return PackageOperationResult.Fail("SIGN_FAILED",
                             $"Failed to sign package before installation: {ex.Message}");
                     }
+                }
+                else
+                {
+                    _logger.LogWarning("DevCertManager is not ready; skipping auto-sign. Package may fail with CERT_NOT_TRUSTED.");
                 }
             }
         }

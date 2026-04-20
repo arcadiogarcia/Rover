@@ -58,6 +58,12 @@ public sealed class ExternalAccessManager : IDisposable
         if (IsEnabled)
             await DisableAsync();
 
+        // Ensure a firewall rule exists for this port so users do not see the Windows
+        // Firewall "Allow access" dialog every time the MSIX install path changes
+        // after an update. First call shows a one-time UAC prompt; subsequent calls
+        // detect the existing rule and skip elevation.
+        await FirewallRuleManager.EnsureInboundRuleAsync(port, _logger);
+
         BearerToken = existingToken ?? GenerateToken();
         Port = port;
 

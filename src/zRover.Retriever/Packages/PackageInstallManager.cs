@@ -12,19 +12,16 @@ namespace zRover.Retriever.Packages;
 /// Read-only operations (<c>list_installed_packages</c>, <c>get_package_info</c>,
 /// <c>launch_app</c>, <c>stop_app</c>) are not gated.
 ///
-/// The first time the gate is enabled, <see cref="DevCertManager.EnsureReadyAsync"/>
-/// is called to create the signing cert and show the one-time UAC trust prompt.
-/// Subsequent enable/disable cycles are instant.
+/// Dev cert initialisation (which may show a UAC prompt to trust the cert) is
+/// deferred to the first actual unsigned-package install rather than triggered on
+/// every toggle / startup restore — see <see cref="LocalDevicePackageManager"/>.
 /// </summary>
 public sealed class PackageInstallManager
 {
-    private readonly IDevCertManager _devCerts;
     private readonly ILogger<PackageInstallManager> _logger;
-    private bool _certInitialised;
 
-    public PackageInstallManager(IDevCertManager devCerts, ILogger<PackageInstallManager> logger)
+    public PackageInstallManager(ILogger<PackageInstallManager> logger)
     {
-        _devCerts = devCerts;
         _logger   = logger;
     }
 
@@ -36,28 +33,16 @@ public sealed class PackageInstallManager
 
     /// <summary>
     /// Allows MCP clients to install and uninstall packages.
-    /// On the first call, initialises the dev cert (may show a one-time UAC prompt to trust it).
+    /// Cheap and side-effect-free: the dev cert (and any UAC trust prompt) is only
+    /// initialised lazily when an unsigned package is actually installed.
     /// </summary>
-    public async Task EnableAsync(CancellationToken ct = default)
+    public Task EnableAsync(CancellationToken ct = default)
     {
-        if (IsEnabled) return;
-
-        if (!_certInitialised)
-        {
-            try
-            {
-                await _devCerts.EnsureReadyAsync(ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Dev cert initialisation failed — unsigned package signing may be unavailable");
-            }
-            _certInitialised = true;
-        }
+        if (IsEnabled) return Task.CompletedTask;
 
         IsEnabled = true;
         StateChanged?.Invoke(this, EventArgs.Empty);
+        return Task.CompletedTask;
     }
 
     /// <summary>Prevents MCP clients from installing or uninstalling packages.</summary>
