@@ -190,6 +190,11 @@ public sealed class RemoteManagerRegistry : IDisposable
                 {
                     connection.Info = connection.Info with { Architecture = archEl.GetString() };
                 }
+                if (infoDoc.RootElement.TryGetProperty("machineName", out var nameEl) &&
+                    nameEl.ValueKind == JsonValueKind.String)
+                {
+                    connection.Info = connection.Info with { MachineName = nameEl.GetString() };
+                }
             }
         }
         catch (Exception ex)
@@ -617,4 +622,6 @@ public record RemoteManagerInfo
     public int AppCount { get; init; }
     /// <summary>OS processor architecture reported by the remote device, e.g. "x64" or "arm64". Null if not yet determined.</summary>
     public string? Architecture { get; init; }
+    /// <summary>Machine name reported by the remote device. Null if not yet determined.</summary>
+    public string? MachineName { get; init; }
 }

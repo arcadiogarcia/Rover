@@ -92,6 +92,7 @@ public class Program
         builder.Services.AddSingleton<IDevCertManager>(sp => sp.GetRequiredService<DevCertManager>());
         builder.Services.AddSingleton<PackageInstallManager>();
         builder.Services.AddSingleton<IDevicePackageManager, LocalDevicePackageManager>();
+        builder.Services.AddSingleton<ControllerRegistry>();
         builder.Services.AddHostedService<Worker>();
 
         // ── Master MCP server ──────────────────────────────────────────────────────
@@ -234,6 +235,29 @@ public class Program
             await proxy.OnSessionRegisteredAsync(session);
 
             return Results.Ok(new SessionRegistrationResponse { SessionId = sessionId });
+        });
+
+        // ── Track inbound MCP controllers (remote retrievers controlling this instance) ──
+        var controllerRegistry = webApp.Services.GetRequiredService<ControllerRegistry>();
+        webApp.Use(async (context, next) =>
+        {
+            if (!context.Request.Path.StartsWithSegments("/mcp"))
+            {
+                await next();
+                return;
+            }
+
+            var remoteIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var key = controllerRegistry.Track(remoteIp);
+            context.RequestAborted.Register(() => controllerRegistry.Untrack(key));
+            try
+            {
+                await next();
+            }
+            finally
+            {
+                controllerRegistry.Untrack(key);
+            }
         });
 
         webApp.MapMcp("/mcp");

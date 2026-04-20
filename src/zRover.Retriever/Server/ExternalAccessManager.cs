@@ -72,6 +72,7 @@ public sealed class ExternalAccessManager : IDisposable
             sp.GetRequiredService<Sessions.SessionRegistry>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<ActiveSessionProxy>());
         builder.Services.AddSingleton(_rootServices.GetRequiredService<PackageStagingManager>());
+        builder.Services.AddSingleton(_rootServices.GetRequiredService<ControllerRegistry>());
 
         builder.Services.AddMcpServer(options =>
         {
@@ -147,6 +148,29 @@ public sealed class ExternalAccessManager : IDisposable
             await proxy.OnSessionRegisteredAsync(session);
 
             return Results.Ok(new Core.Sessions.SessionRegistrationResponse { SessionId = sessionId });
+        });
+
+        // Track inbound MCP controllers on the external endpoint
+        var extControllers = app.Services.GetRequiredService<ControllerRegistry>();
+        app.Use(async (context, next) =>
+        {
+            if (!context.Request.Path.StartsWithSegments("/mcp"))
+            {
+                await next();
+                return;
+            }
+
+            var remoteIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var key = extControllers.Track(remoteIp);
+            context.RequestAborted.Register(() => extControllers.Untrack(key));
+            try
+            {
+                await next();
+            }
+            finally
+            {
+                extControllers.Untrack(key);
+            }
         });
 
         app.MapMcp("/mcp");

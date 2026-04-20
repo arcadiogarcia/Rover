@@ -42,9 +42,9 @@
                     <TextBlock x:Name="ListeningUrlText" Text="URL: —" Opacity="0.7"/>
                 </StackPanel>
 
-                <!-- Remote Retrievers -->
+                <!-- Controlled Remote Retrievers (outbound: this instance controls them) -->
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Remote Retrievers" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <TextBlock Text="Controlled Remote Retrievers" Style="{StaticResource SubtitleTextBlockStyle}"/>
                     <ListView x:Name="ManagersList" MaxHeight="120">
                         <ListView.ItemTemplate>
                             <DataTemplate>
@@ -56,7 +56,10 @@
                                     </Grid.ColumnDefinitions>
                                     <Ellipse Grid.Column="0" Width="8" Height="8"
                                              Fill="{Binding StatusColor}" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding DisplayText}" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                        <TextBlock Text="{Binding DetailText}" Opacity="0.6" FontSize="12"/>
+                                    </StackPanel>
                                     <Button Grid.Column="2" Content="Disconnect" Tag="{Binding ManagerId}"
                                             Click="OnDisconnectManagerClicked" Padding="8,2"/>
                                 </Grid>
@@ -64,7 +67,33 @@
                         </ListView.ItemTemplate>
                     </ListView>
                     <TextBlock x:Name="NoManagersText"
-                               Text="No remote retrievers connected"
+                               Text="No controlled remote retrievers"
+                               Opacity="0.5" FontSize="12"/>
+                </StackPanel>
+
+                <!-- Controlling Remote Retrievers (inbound: they control this instance) -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Controlling Remote Retrievers" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                    <ListView x:Name="ControllersList" MaxHeight="120">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Padding="4,2" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Ellipse Grid.Column="0" Width="8" Height="8"
+                                             Fill="Green" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding DisplayText}"/>
+                                        <TextBlock Text="{Binding DetailText}" Opacity="0.6" FontSize="12"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <TextBlock x:Name="NoControllersText"
+                               Text="No remote retrievers controlling this instance"
                                Opacity="0.5" FontSize="12"/>
                 </StackPanel>
 

@@ -21,6 +21,7 @@ public sealed partial class MainWindow : Window
     private readonly RemoteManagerRegistry _managers;
     private readonly ExternalAccessManager _external;
     private readonly PackageInstallManager _packageInstall;
+    private readonly ControllerRegistry _controllers;
     private readonly IConfiguration _config;
     private readonly RetrieverSettingsStore _settingsStore;
     private readonly DispatcherQueue _dispatcherQueue;
@@ -38,6 +39,7 @@ public sealed partial class MainWindow : Window
         _managers = services.GetRequiredService<RemoteManagerRegistry>();
         _external = services.GetRequiredService<ExternalAccessManager>();
         _packageInstall = services.GetRequiredService<PackageInstallManager>();
+        _controllers = services.GetRequiredService<ControllerRegistry>();
         _config = services.GetRequiredService<IConfiguration>();
         _settingsStore = services.GetRequiredService<RetrieverSettingsStore>();
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
@@ -47,6 +49,7 @@ public sealed partial class MainWindow : Window
         _managers.ManagersChanged += OnManagersChanged;
         _external.StateChanged += OnExternalStateChanged;
         _packageInstall.StateChanged += OnPackageInstallStateChanged;
+        _controllers.ControllersChanged += OnControllersChanged;
         Closed += OnClosed;
 
         RefreshState();
@@ -59,6 +62,7 @@ public sealed partial class MainWindow : Window
         _managers.ManagersChanged -= OnManagersChanged;
         _external.StateChanged -= OnExternalStateChanged;
         _packageInstall.StateChanged -= OnPackageInstallStateChanged;
+        _controllers.ControllersChanged -= OnControllersChanged;
     }
 
     private void OnSessionsChanged(object? sender, EventArgs e) =>
@@ -75,6 +79,9 @@ public sealed partial class MainWindow : Window
 
     private void OnPackageInstallStateChanged(object? sender, EventArgs e) =>
         _dispatcherQueue.TryEnqueue(RefreshPackageInstallState);
+
+    private void OnControllersChanged(object? sender, EventArgs e) =>
+        _dispatcherQueue.TryEnqueue(RefreshControllers);
 
     private void RefreshState()
     {
@@ -102,12 +109,18 @@ public sealed partial class MainWindow : Window
         NoSessionsText.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         SessionsList.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        // Remote managers
-        var managerItems = _managers.Managers.Select(m => new ManagerViewModel
+        // Remote managers (controlled)
+        var managerItems = _managers.Managers.Select(m =>
         {
-            ManagerId = m.ManagerId,
-            DisplayText = $"{m.Alias} — {m.McpUrl} — {m.AppCount} app(s)",
-            IsConnected = m.IsConnected
+            var namePart = m.MachineName ?? m.Alias;
+            var archPart = m.Architecture ?? "unknown";
+            return new ManagerViewModel
+            {
+                ManagerId = m.ManagerId,
+                DisplayText = $"{namePart} ({archPart})",
+                DetailText = $"{m.McpUrl} — {m.AppCount} app(s)",
+                IsConnected = m.IsConnected
+            };
         }).ToList();
 
         ManagersList.ItemsSource = managerItems;
@@ -125,6 +138,20 @@ public sealed partial class MainWindow : Window
 
         RefreshExternalState();
         RefreshPackageInstallState();
+        RefreshControllers();
+    }
+
+    private void RefreshControllers()
+    {
+        var controllerItems = _controllers.Controllers.Select(c => new ControllerViewModel
+        {
+            DisplayText = c.RemoteAddress,
+            DetailText = $"Connected since {c.ConnectedSince.LocalDateTime:g}",
+        }).ToList();
+
+        ControllersList.ItemsSource = controllerItems;
+        ControllersList.Visibility = controllerItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        NoControllersText.Visibility = controllerItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void RefreshPackageInstallState()
@@ -262,11 +289,18 @@ public class ManagerViewModel
 {
     public string ManagerId { get; set; } = "";
     public string DisplayText { get; set; } = "";
+    public string DetailText { get; set; } = "";
     public bool IsConnected { get; set; }
 
     public SolidColorBrush StatusColor => IsConnected
         ? new SolidColorBrush(Colors.Green)
         : new SolidColorBrush(Colors.Red);
+}
+
+public class ControllerViewModel
+{
+    public string DisplayText { get; set; } = "";
+    public string DetailText { get; set; } = "";
 }
 
 public class PastManagerViewModel
