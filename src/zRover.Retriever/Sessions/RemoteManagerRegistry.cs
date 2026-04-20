@@ -195,6 +195,11 @@ public sealed class RemoteManagerRegistry : IDisposable
                 {
                     connection.Info = connection.Info with { MachineName = nameEl.GetString() };
                 }
+                if (infoDoc.RootElement.TryGetProperty("osDescription", out var osEl) &&
+                    osEl.ValueKind == JsonValueKind.String)
+                {
+                    connection.Info = connection.Info with { OsDescription = osEl.GetString() };
+                }
             }
         }
         catch (Exception ex)
@@ -624,4 +629,6 @@ public record RemoteManagerInfo
     public string? Architecture { get; init; }
     /// <summary>Machine name reported by the remote device. Null if not yet determined.</summary>
     public string? MachineName { get; init; }
+    /// <summary>OS description reported by the remote device, e.g. "Microsoft Windows 11.0.26100". Null if not yet determined.</summary>
+    public string? OsDescription { get; init; }
 }

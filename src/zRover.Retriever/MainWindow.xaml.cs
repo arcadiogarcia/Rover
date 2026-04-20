@@ -114,11 +114,14 @@ public sealed partial class MainWindow : Window
         {
             var namePart = m.MachineName ?? m.Alias;
             var archPart = m.Architecture ?? "unknown";
+            var subtitle = string.IsNullOrWhiteSpace(m.OsDescription)
+                ? archPart
+                : $"{archPart} \u2022 {m.OsDescription}";
             return new ManagerViewModel
             {
                 ManagerId = m.ManagerId,
-                DisplayText = $"{namePart} ({archPart})",
-                DetailText = $"{m.McpUrl} — {m.AppCount} app(s)",
+                DisplayText = $"{namePart} ({subtitle})",
+                DetailText = $"{m.McpUrl} \u2014 {m.AppCount} app(s)",
                 IsConnected = m.IsConnected
             };
         }).ToList();
