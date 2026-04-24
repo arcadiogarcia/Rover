@@ -541,11 +541,11 @@
                 <!-- ========== FOOTER ========== -->
                 <StackPanel Orientation="Horizontal" Spacing="4" Padding="4,8,0,0">
                     <HyperlinkButton Content="Privacy"
-                                     NavigateUri="https://github.com/arcadiogarcia/zRover/blob/main/docs/privacy.md"/>
+                                     NavigateUri="https://github.com/arcadiogarcia/zRover/blob/master/docs/privacy.md"/>
                     <TextBlock Text="·" VerticalAlignment="Center"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                     <HyperlinkButton Content="Security"
-                                     NavigateUri="https://github.com/arcadiogarcia/zRover/blob/main/docs/security.md"/>
+                                     NavigateUri="https://github.com/arcadiogarcia/zRover/blob/master/docs/security.md"/>
                     <TextBlock Text="·" VerticalAlignment="Center"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                     <HyperlinkButton Content="Source code"
