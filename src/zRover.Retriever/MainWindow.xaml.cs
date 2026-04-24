@@ -601,6 +601,156 @@ public sealed partial class MainWindow : Window
             System.Diagnostics.Debug.WriteLine($"OnDisconnectManagerClicked failed: {ex}");
         }
     }
+
+    // ── Self-update ───────────────────────────────────────────────────────────
+
+    /// <summary>True while a self-update check is in flight; guards the SplitButton from re-entry.</summary>
+    private bool _updateCheckInProgress;
+
+    /// <summary>Primary action: check this device only.</summary>
+    private void OnCheckForUpdatesClicked(SplitButton sender, SplitButtonClickEventArgs args) =>
+        _ = RunUpdateCheckAsync(includeDownstream: false);
+
+    private void OnCheckForUpdatesLocalClicked(object sender, RoutedEventArgs e) =>
+        _ = RunUpdateCheckAsync(includeDownstream: false);
+
+    private void OnCheckForUpdatesAllClicked(object sender, RoutedEventArgs e) =>
+        _ = RunUpdateCheckAsync(includeDownstream: true);
+
+    private async System.Threading.Tasks.Task RunUpdateCheckAsync(bool includeDownstream)
+    {
+        if (_updateCheckInProgress) return;
+        _updateCheckInProgress = true;
+
+        try
+        {
+            CheckForUpdatesButton.IsEnabled = false;
+            ShowUpdateInfo(InfoBarSeverity.Informational, "Checking for updates…",
+                includeDownstream
+                    ? "Querying this device and all downstream Retrievers."
+                    : "Querying this device.");
+
+            var logger = App.Services?.GetService(typeof(Microsoft.Extensions.Logging.ILoggerFactory))
+                            is Microsoft.Extensions.Logging.ILoggerFactory lf
+                ? lf.CreateLogger("SelfUpdate.UI")
+                : Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+
+            // ── 1. Local device ────────────────────────────────────────────────────
+            string localJson;
+            try
+            {
+                localJson = await SelfUpdateTools.RunLocalUpdateAsync(logger);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Local self-update failed: {ex}");
+                ShowUpdateInfo(InfoBarSeverity.Error,
+                    "Update check failed",
+                    $"Local: {ex.Message}");
+                return;
+            }
+
+            var localOutcome = ParseUpdateOutcome("This device", localJson);
+            var outcomes = new System.Collections.Generic.List<UpdateOutcome> { localOutcome };
+
+            // ── 2. Downstream devices (if requested) ───────────────────────────────
+            if (includeDownstream)
+            {
+                foreach (var mgr in _managers.Managers)
+                {
+                    var label = string.IsNullOrEmpty(mgr.Alias)
+                        ? mgr.ManagerId
+                        : $"{mgr.Alias} ({mgr.ManagerId})";
+                    try
+                    {
+                        var json = await _managers.RouteDeviceToolAsync(
+                            mgr.ManagerId, "update_retriever", "{}", logger);
+                        outcomes.Add(ParseUpdateOutcome(label, json));
+                    }
+                    catch (Exception ex)
+                    {
+                        outcomes.Add(new UpdateOutcome(label, Success: false,
+                            AlreadyCurrent: false, Channel: "?", Message: ex.Message));
+                    }
+                }
+            }
+
+            // ── 3. Aggregate feedback ──────────────────────────────────────────────
+            var anyUpdates = outcomes.Any(o => o.Success && !o.AlreadyCurrent);
+            var anyFailed  = outcomes.Any(o => !o.Success);
+
+            InfoBarSeverity severity;
+            string title;
+            if (anyFailed && !anyUpdates)
+            {
+                severity = InfoBarSeverity.Warning;
+                title    = outcomes.Count == 1 ? "Update check failed" : "Some update checks failed";
+            }
+            else if (anyUpdates)
+            {
+                severity = InfoBarSeverity.Success;
+                title    = outcomes.Count == 1
+                    ? "Update started"
+                    : $"Update started on {outcomes.Count(o => o.Success && !o.AlreadyCurrent)} device(s)";
+            }
+            else
+            {
+                severity = InfoBarSeverity.Success;
+                title    = outcomes.Count == 1
+                    ? "Already up to date"
+                    : "All devices already up to date";
+            }
+
+            var detail = string.Join("\n",
+                outcomes.Select(o => $"• {o.DeviceLabel} [{o.Channel}]: {o.Message}"));
+            ShowUpdateInfo(severity, title, detail);
+        }
+        finally
+        {
+            CheckForUpdatesButton.IsEnabled = true;
+            _updateCheckInProgress = false;
+        }
+    }
+
+    private void ShowUpdateInfo(InfoBarSeverity severity, string title, string message)
+    {
+        UpdateInfoBar.Severity = severity;
+        UpdateInfoBar.Title    = title;
+        UpdateInfoBar.Message  = message;
+        UpdateInfoBar.IsOpen   = true;
+    }
+
+    private readonly record struct UpdateOutcome(
+        string DeviceLabel,
+        bool Success,
+        bool AlreadyCurrent,
+        string Channel,
+        string Message);
+
+    private static UpdateOutcome ParseUpdateOutcome(string deviceLabel, string json)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var success = root.TryGetProperty("success", out var s) && s.GetBoolean();
+            var alreadyCurrent = root.TryGetProperty("alreadyCurrent", out var a) &&
+                                 a.ValueKind == System.Text.Json.JsonValueKind.True;
+            var channel = root.TryGetProperty("updateChannel", out var c) && c.ValueKind == System.Text.Json.JsonValueKind.String
+                ? c.GetString() ?? "?"
+                : "?";
+            var message = root.TryGetProperty("message", out var m) && m.ValueKind == System.Text.Json.JsonValueKind.String
+                ? m.GetString() ?? ""
+                : (root.TryGetProperty("error", out var e) ? e.GetString() ?? "" : "");
+            return new UpdateOutcome(deviceLabel, success, alreadyCurrent, channel, message);
+        }
+        catch (Exception ex)
+        {
+            return new UpdateOutcome(deviceLabel, Success: false,
+                AlreadyCurrent: false, Channel: "?",
+                Message: $"Could not parse update response: {ex.Message}");
+        }
+    }
 }
 
 public class SessionViewModel

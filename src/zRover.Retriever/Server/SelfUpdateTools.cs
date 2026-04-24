@@ -87,28 +87,42 @@ public static class SelfUpdateTools
                     }
                 }
 
-                // ── 1. Read current installed version + branch on install source ────
-                var currentPkg    = Package.Current;
-                var currentPkgVer = currentPkg.Id.Version;
-                var currentVer    = new Version(
-                    currentPkgVer.Major, currentPkgVer.Minor,
-                    currentPkgVer.Build, currentPkgVer.Revision);
-                var familyName    = currentPkg.Id.FamilyName;
-                var aumid         = $"{familyName}!App";
-                var sigKind       = currentPkg.SignatureKind;
+                return await RunLocalUpdateAsync(logger);
+            });
+    }
 
-                logger.LogInformation(
-                    "Self-update check: current version {Version}, signatureKind {SignatureKind}",
-                    currentVer, sigKind);
+    /// <summary>
+    /// Runs the appropriate self-update flow for the current device (Store or GitHub
+    /// depending on <see cref="PackageSignatureKind"/>) and returns the same JSON
+    /// payload the <c>update_retriever</c> MCP tool produces. Exposed so the in-app
+    /// UI can trigger updates without round-tripping through the MCP transport.
+    /// </summary>
+    public static async Task<string> RunLocalUpdateAsync(ILogger logger)
+    {
+        var currentPkg    = Package.Current;
+        var currentPkgVer = currentPkg.Id.Version;
+        var currentVer    = new Version(
+            currentPkgVer.Major, currentPkgVer.Minor,
+            currentPkgVer.Build, currentPkgVer.Revision);
+        var familyName    = currentPkg.Id.FamilyName;
+        var aumid         = $"{familyName}!App";
+        var sigKind       = currentPkg.SignatureKind;
 
-                if (sigKind == PackageSignatureKind.Store)
-                {
-                    return await UpdateViaStoreAsync(currentVer, logger);
-                }
+        logger.LogInformation(
+            "Self-update check: current version {Version}, signatureKind {SignatureKind}",
+            currentVer, sigKind);
 
-                // ── GitHub fallback path (developer / sideload installs) ──────────────
+        if (sigKind == PackageSignatureKind.Store)
+        {
+            return await UpdateViaStoreAsync(currentVer, logger);
+        }
 
-                // ── 2. Fetch latest GitHub release ─────────────────────────────────────
+        return await UpdateViaGitHubAsync(currentVer, aumid, logger);
+    }
+
+    private static async Task<string> UpdateViaGitHubAsync(Version currentVer, string aumid, ILogger logger)
+    {
+                // ── Fetch latest GitHub release ─────────────────────────────────────────
                 GitHubRelease release;
                 try
                 {
@@ -264,7 +278,6 @@ public static class SelfUpdateTools
                     newVersion     = latestVer.ToString(),
                     assetName      = asset.Name,
                 }, JsonOpts);
-            });
     }
 
     // ══════════════════════════════════════════════════════════════════════════

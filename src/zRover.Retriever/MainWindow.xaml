@@ -82,6 +82,12 @@
                       HorizontalScrollMode="Disabled">
             <StackPanel x:Name="BodyPanel" Spacing="20" MaxWidth="1200" HorizontalAlignment="Center">
 
+                <!-- Update / status feedback (hidden until a check runs). -->
+                <controls:InfoBar x:Name="UpdateInfoBar"
+                                  IsOpen="False"
+                                  IsClosable="True"
+                                  Severity="Informational"/>
+
                 <!-- ========== HERO ========== -->
                 <Border Style="{StaticResource CardBorderStyle}" Padding="24">
                     <Grid ColumnSpacing="20" RowSpacing="12">
@@ -106,6 +112,7 @@
                                 CornerRadius="14"
                                 Padding="12,4"
                                 VerticalAlignment="Top"
+                                HorizontalAlignment="Right"
                                 AutomationProperties.Name="Service status">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <Ellipse x:Name="StatusIndicator" Width="8" Height="8"
@@ -116,6 +123,39 @@
                                            VerticalAlignment="Center"/>
                             </StackPanel>
                         </Border>
+
+                        <!-- Check for updates. Primary = this device only.
+                             Flyout option also fans out to all downstream managers. -->
+                        <SplitButton Grid.Row="2" Grid.Column="1"
+                                     x:Name="CheckForUpdatesButton"
+                                     Click="OnCheckForUpdatesClicked"
+                                     HorizontalAlignment="Right"
+                                     ToolTipService.ToolTip="Check for updates on this device">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                          Glyph="&#xE777;"
+                                          FontSize="14"/>
+                                <TextBlock Text="Check for updates"/>
+                            </StackPanel>
+                            <SplitButton.Flyout>
+                                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                    <MenuFlyoutItem x:Name="CheckUpdatesLocalMenuItem"
+                                                    Text="Check this device only"
+                                                    Click="OnCheckForUpdatesLocalClicked">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE977;"/>
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem x:Name="CheckUpdatesAllMenuItem"
+                                                    Text="Check this device and all downstream"
+                                                    Click="OnCheckForUpdatesAllClicked">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE968;"/>
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                </MenuFlyout>
+                            </SplitButton.Flyout>
+                        </SplitButton>
 
                         <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
                                     Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
@@ -134,7 +174,7 @@
                             </Button>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                        <TextBlock Grid.Row="2" Grid.Column="0"
                                    x:Name="LocalDeviceInfoText"
                                    Text=""
                                    Style="{StaticResource CaptionMutedStyle}"/>

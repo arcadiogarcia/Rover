@@ -7,7 +7,7 @@
     (or set them via /p:AppxPackageName=... at pack time). Do not commit
     Store-specific values here.
   -->
-  <Identity Name="58996ARCADIOGARCA.zRoverRetriever" Publisher="CN=5F63796F-84F4-4C45-860F-616E76512FFB" ProcessorArchitecture="arm64" Version="1.0.0.1" />
+  <Identity Name="58996ARCADIOGARCA.zRoverRetriever" Publisher="CN=5F63796F-84F4-4C45-860F-616E76512FFB" ProcessorArchitecture="arm64" Version="1.0.1.0" />
   <Properties>
     <DisplayName>zRover Retriever</DisplayName>
     <PublisherDisplayName>ARCADIO GARCÍA</PublisherDisplayName>
