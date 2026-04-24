@@ -7,6 +7,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using QRCoder;
+using System.Collections.Generic;
+using System.Linq;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage.Streams;
 using zRover.Retriever.Packages;
@@ -58,6 +60,26 @@ public sealed partial class MainWindow : Window
         AppVersionText.Text = $"• v{v.Major}.{v.Minor}.{v.Build}";
 
         LocalDeviceInfoText.Text = BuildLocalDeviceInfo();
+
+#if DEBUG
+        // Screenshot / marketing mode: when ZROVER_MOCK_UI=1 is set we bypass
+        // every real service and stuff the UI with synthetic data so the app
+        // can be captured for the Store listing without needing real sessions
+        // or external pairing. Only compiled into Debug builds.
+        if (Environment.GetEnvironmentVariable("ZROVER_MOCK_UI") == "1")
+        {
+            _registry      = null!;
+            _managers      = null!;
+            _external      = null!;
+            _packageInstall = null!;
+            _controllers   = null!;
+            _config        = null!;
+            _settingsStore = null!;
+            _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+            ApplyMockData();
+            return;
+        }
+#endif
 
         var services = App.Services!;
         _registry = services.GetRequiredService<SessionRegistry>();
@@ -226,6 +248,159 @@ public sealed partial class MainWindow : Window
         ControllersList.Visibility = controllerItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         NoControllersPanel.Visibility = controllerItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
+
+#if DEBUG
+    /// <summary>
+    /// Populate every visible piece of the UI with synthetic, screenshot-friendly
+    /// data loaded from the embedded mock-ui-data.json resource. Active when the
+    /// env var ZROVER_MOCK_UI=1 is set on a Debug build.
+    /// </summary>
+    private void ApplyMockData()
+    {
+        var mock = LoadMockData();
+
+        // ── Hero ─────────────────────────────────────────────────────────────
+        ListeningUrlText.Text    = mock.LocalUrl;
+        LocalDeviceInfoText.Text = mock.LocalDeviceInfo;
+        StatusText.Text          = mock.StatusText;
+
+        // ── Sessions ─────────────────────────────────────────────────────────
+        var sessions = mock.Sessions.Select(s => new SessionViewModel
+        {
+            SessionId   = s.SessionId,
+            DisplayName = s.DisplayName,
+            McpUrl      = s.McpUrl,
+            IsConnected = s.IsConnected,
+            IsActive    = s.IsActive,
+        }).ToList();
+        SessionsList.ItemsSource = sessions;
+        SessionsBadge.Value = sessions.Count;
+        NoSessionsPanel.Visibility = sessions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        SessionsList.Visibility    = sessions.Count > 0  ? Visibility.Visible : Visibility.Collapsed;
+
+        // ── MCP clients ──────────────────────────────────────────────────────
+        var controllers = mock.Controllers.Select(c => new ControllerViewModel
+        {
+            DisplayText = c.DisplayText,
+            DetailText  = c.DetailText,
+        }).ToList();
+        ControllersList.ItemsSource = controllers;
+        ControllersBadge.Value = controllers.Count;
+        NoControllersPanel.Visibility = controllers.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ControllersList.Visibility    = controllers.Count > 0  ? Visibility.Visible : Visibility.Collapsed;
+
+        // ── Remote retrievers ────────────────────────────────────────────────
+        var managers = mock.RemoteRetrievers.Select(m => new ManagerViewModel
+        {
+            ManagerId   = m.ManagerId,
+            DisplayText = m.DisplayText,
+            DetailText  = m.DetailText,
+            IsConnected = m.IsConnected,
+        }).ToList();
+        ManagersList.ItemsSource = managers;
+        ManagersBadge.Value = managers.Count;
+        NoManagersPanel.Visibility = managers.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ManagersList.Visibility    = managers.Count > 0  ? Visibility.Visible : Visibility.Collapsed;
+        PastManagersPanel.Visibility = Visibility.Collapsed;
+
+        // ── External access ──────────────────────────────────────────────────
+        ExternalToggle.IsOn = mock.ExternalAccess.Enabled;
+        ExternalToggle.Toggled += MockExternalToggled;
+
+        if (mock.ExternalAccess.Enabled)
+        {
+            ExternalLoadingPanel.Visibility = Visibility.Collapsed;
+            ExternalInfoPanel.Visibility    = Visibility.Visible;
+            ExternalUrlText.Text   = mock.ExternalAccess.Url;
+            ExternalTokenText.Text = mock.ExternalAccess.BearerToken;
+            _ = UpdateQrCodeAsync(mock.ExternalAccess.QrCodePayload);
+        }
+        else
+        {
+            ExternalLoadingPanel.Visibility = Visibility.Collapsed;
+            ExternalInfoPanel.Visibility    = Visibility.Collapsed;
+        }
+
+        // ── Advanced toggles ─────────────────────────────────────────────────
+        PackageInstallToggle.IsOn = mock.PackageInstall.Enabled;
+        PackageInstallToggle.Toggled += MockPackageInstallToggled;
+    }
+
+    private MockUiData LoadMockData()
+    {
+        var asm = typeof(MainWindow).Assembly;
+        using var stream = asm.GetManifestResourceStream("MockUiData.json")
+            ?? throw new InvalidOperationException(
+                "Mock UI data resource not embedded. Rebuild the Debug configuration.");
+        using var reader = new System.IO.StreamReader(stream);
+        var json = reader.ReadToEnd();
+        return System.Text.Json.JsonSerializer.Deserialize<MockUiData>(json,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                ReadCommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+                AllowTrailingCommas = true,
+            }) ?? throw new InvalidOperationException("mock-ui-data.json is empty or malformed.");
+    }
+
+    // No-op handlers so the toggles snap back if a viewer tries to flip them.
+    private void MockExternalToggled(object sender, RoutedEventArgs e)
+    {
+        ExternalToggle.Toggled -= MockExternalToggled;
+        ExternalToggle.IsOn = true;
+        ExternalToggle.Toggled += MockExternalToggled;
+    }
+
+    private void MockPackageInstallToggled(object sender, RoutedEventArgs e)
+    {
+        PackageInstallToggle.Toggled -= MockPackageInstallToggled;
+        PackageInstallToggle.IsOn = false;
+        PackageInstallToggle.Toggled += MockPackageInstallToggled;
+    }
+
+    private sealed class MockUiData
+    {
+        public string LocalDeviceInfo { get; set; } = "";
+        public string LocalUrl        { get; set; } = "";
+        public string StatusText      { get; set; } = "";
+        public List<MockSession>     Sessions         { get; set; } = new();
+        public List<MockController>  Controllers      { get; set; } = new();
+        public List<MockManager>     RemoteRetrievers { get; set; } = new();
+        public MockExternalAccess    ExternalAccess   { get; set; } = new();
+        public MockPackageInstall    PackageInstall   { get; set; } = new();
+    }
+    private sealed class MockSession
+    {
+        public string SessionId { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string McpUrl { get; set; } = "";
+        public bool IsConnected { get; set; }
+        public bool IsActive { get; set; }
+    }
+    private sealed class MockController
+    {
+        public string DisplayText { get; set; } = "";
+        public string DetailText  { get; set; } = "";
+    }
+    private sealed class MockManager
+    {
+        public string ManagerId { get; set; } = "";
+        public string DisplayText { get; set; } = "";
+        public string DetailText { get; set; } = "";
+        public bool IsConnected { get; set; }
+    }
+    private sealed class MockExternalAccess
+    {
+        public bool Enabled { get; set; }
+        public string Url { get; set; } = "";
+        public string BearerToken { get; set; } = "";
+        public string QrCodePayload { get; set; } = "";
+    }
+    private sealed class MockPackageInstall
+    {
+        public bool Enabled { get; set; }
+    }
+#endif
 
     /// <summary>
     /// Builds the one-line description of the local device shown under the title bar,

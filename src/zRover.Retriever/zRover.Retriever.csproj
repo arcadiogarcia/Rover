@@ -34,6 +34,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\docs\integration-guide.md" LogicalName="IntegrationGuide.md" />
+    <EmbeddedResource Include="mock-ui-data.json" LogicalName="MockUiData.json" Condition="'$(Configuration)' == 'Debug'" />
   </ItemGroup>
 
   <ItemGroup>

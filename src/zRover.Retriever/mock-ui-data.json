@@ -1,0 +1,62 @@
+{
+    "_comment": "Synthetic data shown by the Retriever UI when launched with ZROVER_MOCK_UI=1 (Debug builds only). Edit any field; rebuild + redeploy to see changes. Nothing here is read in production.",
+    "localDeviceInfo": "STUDIO-DEV \u2022 x64 \u2022 Microsoft Windows 11 Pro 26100",
+    "localUrl": "http://localhost:5200",
+    "statusText": "Running",
+    "sessions": [
+        {
+            "sessionId": "odeen-7c2a",
+            "displayName": "Odeen",
+            "mcpUrl": "http://10.0.0.42:5201/mcp",
+            "isConnected": true,
+            "isActive": true
+        },
+        {
+            "sessionId": "dua-9183",
+            "displayName": "Dua",
+            "mcpUrl": "http://10.0.0.42:5201/mcp",
+            "isConnected": true,
+            "isActive": false
+        },
+        {
+            "sessionId": "tritt-4f5b",
+            "displayName": "Tritt",
+            "mcpUrl": "http://10.0.0.43:5201/mcp",
+            "isConnected": true,
+            "isActive": false
+        }
+    ],
+    "controllers": [
+        {
+            "displayText": "GitHub Copilot (VS Code)",
+            "detailText": "127.0.0.1 \u2014 connected 38m ago"
+        },
+        {
+            "displayText": "Claude Desktop 1.4.2",
+            "detailText": "127.0.0.1 \u2014 connected 14m ago"
+        }
+    ],
+    "remoteRetrievers": [
+        {
+            "managerId": "lab-arm64",
+            "displayText": "LAB-SURFACE-PRO (arm64 \u2022 Windows 11)",
+            "detailText": "http://10.0.0.42:5201/mcp \u2014 2 app(s)",
+            "isConnected": true
+        },
+        {
+            "managerId": "test-rig",
+            "displayText": "LAB-NEO (x64 \u2022 Windows 10X)",
+            "detailText": "http://10.0.0.43:5201/mcp \u2014 1 app(s)",
+            "isConnected": true
+        }
+    ],
+    "externalAccess": {
+        "enabled": true,
+        "url": "http://10.0.0.10:5201/mcp",
+        "bearerToken": "not-a-real-token-7c2a91b3f8e4d5a6",
+        "qrCodePayload": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&msockid=715f87a73ff911f199d65804a4e60fd5"
+    },
+    "packageInstall": {
+        "enabled": false
+    }
+}
