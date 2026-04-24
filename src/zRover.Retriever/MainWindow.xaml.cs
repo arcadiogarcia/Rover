@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using QRCoder;
@@ -31,8 +32,30 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = "zRover Retriever";
 
+        // Modern WinUI 3 title bar: extend content into the caption area and
+        // designate our custom drag region. Caption buttons remain handled by
+        // the framework, including theme/accent updates.
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+
+        // Apply Mica backdrop from code-behind. Constructing MicaBackdrop in
+        // XAML can fail on unpackaged hosts; setting it here is more reliable
+        // and lets us silently fall back if the OS doesn't support it (Win10).
+        try
+        {
+            SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
+        }
+        catch { /* Mica unsupported — keep default backdrop. */ }
+
+        // Sensible default window size so the layout opens fully visible.
+        try
+        {
+            AppWindow.Resize(new Windows.Graphics.SizeInt32(1100, 800));
+        }
+        catch { /* AppWindow may not be available in some hosts */ }
+
         var v = Windows.ApplicationModel.Package.Current.Id.Version;
-        AppVersionText.Text = $"v{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
+        AppVersionText.Text = $"• v{v.Major}.{v.Minor}.{v.Build}";
 
         LocalDeviceInfoText.Text = BuildLocalDeviceInfo();
 
@@ -54,7 +77,47 @@ public sealed partial class MainWindow : Window
         _controllers.ControllersChanged += OnControllersChanged;
         Closed += OnClosed;
 
+        // AdaptiveTrigger in WinUI 3 desktop windows can miss size changes,
+        // so drive the narrow/wide layout swap directly from the root grid's
+        // SizeChanged event. This guarantees the right column collapses
+        // beneath the left one whenever the window gets too narrow.
+        if (Content is FrameworkElement root)
+        {
+            root.SizeChanged += OnRootSizeChanged;
+        }
+
         RefreshState();
+    }
+
+    private const double NarrowBreakpoint = 900.0;
+    private bool? _isWide;
+
+    private void OnRootSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var wide = e.NewSize.Width >= NarrowBreakpoint;
+        if (_isWide == wide) return;
+        _isWide = wide;
+
+        if (wide)
+        {
+            LeftColumn.Width = new GridLength(1, GridUnitType.Star);
+            RightColumn.Width = new GridLength(380);
+            FirstRow.Height = GridLength.Auto;
+            SecondRow.Height = new GridLength(0);
+            BodyGrid.ColumnSpacing = 20;
+            Grid.SetColumn(RightPanel, 1);
+            Grid.SetRow(RightPanel, 0);
+        }
+        else
+        {
+            LeftColumn.Width = new GridLength(1, GridUnitType.Star);
+            RightColumn.Width = new GridLength(0);
+            FirstRow.Height = GridLength.Auto;
+            SecondRow.Height = GridLength.Auto;
+            BodyGrid.ColumnSpacing = 0;
+            Grid.SetColumn(RightPanel, 0);
+            Grid.SetRow(RightPanel, 1);
+        }
     }
 
     private void OnClosed(object sender, WindowEventArgs args)
@@ -88,7 +151,7 @@ public sealed partial class MainWindow : Window
     private void RefreshState()
     {
         var url = _config["Urls"] ?? "http://localhost:5200";
-        ListeningUrlText.Text = $"URL: {url}";
+        ListeningUrlText.Text = url;
 
         // Sessions
         var sessions = _registry.Sessions;
@@ -108,7 +171,8 @@ public sealed partial class MainWindow : Window
         }).ToList();
 
         SessionsList.ItemsSource = items;
-        NoSessionsText.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        SessionsBadge.Value = items.Count;
+        NoSessionsPanel.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         SessionsList.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         // Remote managers (controlled)
@@ -129,8 +193,9 @@ public sealed partial class MainWindow : Window
         }).ToList();
 
         ManagersList.ItemsSource = managerItems;
+        ManagersBadge.Value = managerItems.Count;
         ManagersList.Visibility = managerItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        NoManagersText.Visibility = managerItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        NoManagersPanel.Visibility = managerItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         // Past remote retrievers: saved entries not currently connected
         var connectedUrls = _managers.Managers.Select(m => m.McpUrl).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -157,8 +222,9 @@ public sealed partial class MainWindow : Window
         }).ToList();
 
         ControllersList.ItemsSource = controllerItems;
+        ControllersBadge.Value = controllerItems.Count;
         ControllersList.Visibility = controllerItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        NoControllersText.Visibility = controllerItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        NoControllersPanel.Visibility = controllerItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -194,12 +260,18 @@ public sealed partial class MainWindow : Window
         ExternalToggle.IsOn = _external.IsEnabled;
         ExternalToggle.Toggled += OnExternalToggled;
 
-        ExternalInfoPanel.Visibility = _external.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
+        // The info panel is only meaningful once we actually have a URL/token.
+        // While EnableAsync is still spinning up the listener (or creating the
+        // firewall rule on first run), show a small loading indicator instead.
+        var hasDetails = _external.IsEnabled && !string.IsNullOrEmpty(_external.ExternalUrl);
+        ExternalInfoPanel.Visibility = hasDetails ? Visibility.Visible : Visibility.Collapsed;
+        ExternalLoadingPanel.Visibility =
+            (_external.IsEnabled && !hasDetails) ? Visibility.Visible : Visibility.Collapsed;
 
-        if (_external.IsEnabled)
+        if (hasDetails)
         {
-            ExternalUrlText.Text = $"External URL: {_external.ExternalUrl}";
-            ExternalTokenText.Text = $"Token: {_external.BearerToken}";
+            ExternalUrlText.Text = _external.ExternalUrl ?? string.Empty;
+            ExternalTokenText.Text = _external.BearerToken ?? string.Empty;
             _ = UpdateQrCodeAsync(_external.GetConnectionLink());
         }
         else
@@ -239,9 +311,17 @@ public sealed partial class MainWindow : Window
     private async void OnExternalToggled(object sender, RoutedEventArgs e)
     {
         if (ExternalToggle.IsOn)
+        {
+            // Show the loading panel immediately so the user sees feedback
+            // while the listener and firewall rule are being set up.
+            ExternalLoadingPanel.Visibility = Visibility.Visible;
+            ExternalInfoPanel.Visibility = Visibility.Collapsed;
             await _external.EnableAsync();
+        }
         else
+        {
             await _external.DisableAsync();
+        }
     }
 
     private async void OnPackageInstallToggled(object sender, RoutedEventArgs e)
@@ -250,6 +330,14 @@ public sealed partial class MainWindow : Window
             await _packageInstall.EnableAsync();
         else
             _packageInstall.Disable();
+    }
+
+    private void OnCopyLocalUrlClicked(object sender, RoutedEventArgs e)
+    {
+        var url = _config["Urls"] ?? "http://localhost:5200";
+        var dp = new DataPackage();
+        dp.SetText(url);
+        Clipboard.SetContent(dp);
     }
 
     private void OnCopyLinkClicked(object sender, RoutedEventArgs e)
@@ -321,6 +409,8 @@ public class ManagerViewModel
     public SolidColorBrush StatusColor => IsConnected
         ? new SolidColorBrush(Colors.Green)
         : new SolidColorBrush(Colors.Red);
+
+    public string DisconnectAutomationName => $"Disconnect {DisplayText}";
 }
 
 public class ControllerViewModel
@@ -336,4 +426,7 @@ public class PastManagerViewModel
     public string Alias { get; set; } = "";
 
     public string DisplayText => string.IsNullOrEmpty(Alias) ? McpUrl : $"{Alias} — {McpUrl}";
+
+    public string ReconnectAutomationName => $"Reconnect to {DisplayText}";
+    public string ForgetAutomationName => $"Forget {DisplayText}";
 }

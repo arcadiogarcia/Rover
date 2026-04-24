@@ -4,7 +4,7 @@ zRover gives development AI agents control over Windows apps, closing the inner 
 
 It is built on the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) and exposes screenshot capture, input injection, app-defined action dispatch, package management, and more as MCP tools that any AI agent or test harness can call over HTTP.
 
-> Warning: zRover is fundamentally a tool that allows to install unsigned software and inject input into your device, and therefore introduces security risks. We recommend to only use it in test devices and trusted local networks. For more information, read the [Security Considerations](docs/security.md) guide.
+> Warning: zRover is fundamentally a tool that allows to install unsigned software and inject input into your device, and therefore introduces security risks. We recommend to only use it in test devices and trusted local networks. For more information, read the [Security Considerations](docs/security.md) guide. See also the [Privacy Policy](docs/privacy.md).
 
 ## Components
 
