@@ -18,6 +18,15 @@
     <ProjectGuid>{A1270008-B000-4000-8000-000000000008}</ProjectGuid>
   </PropertyGroup>
 
+  <!-- Debug builds are self-contained so the MSIX can be deployed to fresh
+       remote machines (via Rover install_package) without requiring a
+       matching .NET runtime + WindowsAppSDK framework package to be present. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <SelfContained>true</SelfContained>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <RuntimeIdentifier>win-$(Platform.ToLower())</RuntimeIdentifier>
+  </PropertyGroup>
+
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
       <SubType>Designer</SubType>
@@ -37,8 +46,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\zRover.WinUI\zRover.WinUI.csproj" />
-    <ProjectReference Include="..\zRover.Core\zRover.Core.csproj" />
+    <!-- Strip the self-contained / RID props from project-reference traversal so
+         the referenced libraries don't try to produce their own MsixContent
+         (NETSDK1152 conflict). The sample is the only MSIX in this graph. -->
+    <ProjectReference Include="..\zRover.WinUI\zRover.WinUI.csproj">
+      <GlobalPropertiesToRemove>SelfContained;WindowsAppSDKSelfContained;RuntimeIdentifier;WindowsPackageType</GlobalPropertiesToRemove>
+    </ProjectReference>
+    <ProjectReference Include="..\zRover.Core\zRover.Core.csproj">
+      <GlobalPropertiesToRemove>SelfContained;WindowsAppSDKSelfContained;RuntimeIdentifier;WindowsPackageType</GlobalPropertiesToRemove>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>

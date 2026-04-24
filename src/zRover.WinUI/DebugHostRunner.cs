@@ -73,6 +73,8 @@ namespace zRover.WinUI
                 _capabilities.Add(new InputInjectionCapability(_window));
             if (_options.EnableScreenshots)
                 _capabilities.Add(new ScreenshotCapability(_window));
+            if (_options.EnableFrameCapture)
+                _capabilities.Add(new FrameCaptureCapability(_window));
             if (_options.ActionableApp != null)
                 _capabilities.Add(new AppActionCapability(_options.ActionableApp));
             if (_options.EnableUiTree)

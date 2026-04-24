@@ -54,6 +54,14 @@ namespace zRover.Core
         public bool EnableWaitFor { get; set; } = true;
 
         /// <summary>
+        /// Enables the <c>capture_frames</c> MCP tool, which records a burst of
+        /// compositor frames using the <c>Windows.Graphics.Capture</c> pipeline
+        /// and writes per-frame PNGs with precise timing metadata to disk.
+        /// WinUI 3 only. Defaults to <c>true</c>.
+        /// </summary>
+        public bool EnableFrameCapture { get; set; } = true;
+
+        /// <summary>
         /// Base URL of the <c>zRover.Retriever</c> superset MCP server.
         /// When set, the FullTrust companion process will register this app instance
         /// with the manager on startup so that it appears in the manager's session list.

@@ -56,22 +56,29 @@ function Find-MSBuild {
 if (-not $SkipBuild) {
     $msbuild = if ($env:MSBUILD_PATH -and (Test-Path $env:MSBUILD_PATH)) { $env:MSBUILD_PATH } else { Find-MSBuild }
     Write-Host "Building ($Config|$Arch) with MSBuild..."
+    # Self-contained / RID are configured in the csproj (Debug only) so the MSIX
+    # bundles the .NET runtime and WindowsAppSDK framework, allowing remote
+    # deploy to machines that don't have them installed.
     & $msbuild $ProjectFile /p:Configuration=$Config /p:Platform=$Arch /t:Build /m /v:minimal
     if ($LASTEXITCODE -ne 0) { throw 'MSBuild failed' }
     Write-Host 'Build OK'
 }
 
 # ── 3. Locate AppX layout produced by WinAppSDK tooling ──────────────────────
-# Older SDK/VS builds put the layout in a nested AppX\ subfolder; newer ones
-# put it directly in the bin output directory. Accept either.
+# Order of precedence (newest WinAppSDK + RID-aware self-contained builds first):
+#   1. bin\<Arch>\<Config>\net*\<rid>\AppxManifest.xml   (self-contained)
+#   2. bin\<Arch>\<Config>\net*\AppX\AppxManifest.xml    (older VS layouts)
+#   3. bin\<Arch>\<Config>\net*\AppxManifest.xml         (framework-dependent flat)
 $BinDir    = Join-Path $ProjectDir "bin\$Arch\$Config\net8.0-windows10.0.19041.0"
-$LayoutDir = Join-Path $BinDir "AppX"
-if (-not (Test-Path $LayoutDir)) {
-    if (Test-Path (Join-Path $BinDir "AppxManifest.xml")) {
-        $LayoutDir = $BinDir
-    } else {
-        throw "AppX layout not found at $LayoutDir (or $BinDir) - did the build succeed?"
-    }
+$RidDir    = Join-Path $BinDir ("win-" + $Arch.ToLower())
+if (Test-Path (Join-Path $RidDir "AppxManifest.xml")) {
+    $LayoutDir = $RidDir
+} elseif (Test-Path (Join-Path $BinDir "AppX\AppxManifest.xml")) {
+    $LayoutDir = Join-Path $BinDir "AppX"
+} elseif (Test-Path (Join-Path $BinDir "AppxManifest.xml")) {
+    $LayoutDir = $BinDir
+} else {
+    throw "AppX layout not found at $RidDir, $BinDir\AppX, or $BinDir - did the build succeed?"
 }
 Write-Host "Layout: $LayoutDir"
 
