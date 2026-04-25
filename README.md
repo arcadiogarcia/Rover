@@ -12,20 +12,24 @@ zRover is composed of two independent components that can be used separately or 
 
 | Component | What it does |
 |---|---|
-| **In-app integration** (`zRover.Uwp`) | A NuGet library you drop into your UWP app. It starts an in-process MCP server that exposes the app's UI and actions directly to any connected agent. |
+| **In-app integration** (`zRover.Uwp` / `zRover.WinUI`) | A NuGet library you drop into your **UWP** or **WinUI 3** app. It exposes the app's UI and actions directly to any connected agent — UWP launches a FullTrust companion process, WinUI 3 hosts the MCP server in-process. |
 | **Background service** (`zRover Retriever`) | A standalone Windows service (packaged MSIX) that provides app management (install, update, launch) and multi-device federation. When running, it becomes the single MCP entry point for all interactions across every app that uses the in-app integration, so agents only need one connection to reach everything. |
 
 Use the **in-app integration** alone when you only need to control a single app. Add the **background service** when you also need to deploy builds, manage the app lifecycle, or federate multiple devices. Together they form the complete inner loop: an agent can deploy a new build, launch the app, interact with its UI through a single MCP endpoint, and verify the result — all without human involvement.
 
-## Add zRover to Your UWP App
+## Add zRover to Your UWP or WinUI 3 App
 
-Install the NuGet package and integrate in three lines of code:
+Install the matching NuGet package and integrate in a few lines of code:
 
-```
+```powershell
+# UWP apps
 dotnet add package zRover.Uwp --prerelease
+
+# WinUI 3 (Windows App SDK) apps
+dotnet add package zRover.WinUI --prerelease
 ```
 
-See the **[Integration Guide](docs/integration-guide.md)** for complete setup instructions, manifest configuration, MCP client setup for VS Code / Claude / Cursor / Windsurf, the full tool reference (22 tools), and troubleshooting (or just point your agent to this .md and ask it to set it up for you).
+See the **[Integration Guide](docs/integration-guide.md)** for complete setup instructions for both platforms — manifest configuration, MCP client setup for VS Code / Claude / Cursor / Windsurf, the full tool reference (22 tools), and troubleshooting (or just point your agent to this .md and ask it to set it up for you).
 
 ## Connect an MCP Client
 

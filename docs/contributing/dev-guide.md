@@ -56,6 +56,8 @@ MCP Client (tests, AI agents, etc.)
 | **zRover.Mcp** | netstandard2.0 | MCP SDK adapter — bridges `IMcpToolRegistry` to `McpServerTool` via `DelegateMcpServerTool` |
 | **zRover.Uwp** | UAP 10.0.19041 | UWP class library — debug host, capabilities, AppService handler, coordinate resolver |
 | **zRover.Uwp.Sample** | UAP 10.0.19041 | Sample UWP app with Color Picker test UI for E2E testing |
+| **zRover.WinUI** | net8.0-windows10.0.19041.0 | WinUI 3 (Windows App SDK) class library — same capabilities as `zRover.Uwp` but the MCP server runs **in-process**, no FullTrust companion required |
+| **zRover.WinUI.Sample** | net8.0-windows10.0.19041.0 | Sample WinUI 3 app for E2E testing of the in-process integration |
 | **zRover.FullTrust.McpServer** | net8.0-windows | Out-of-process MCP HTTP server, bridges to UWP via AppService IPC |
 | **zRover.Retriever** | net9.0-windows | Packaged WinAppSDK service: MCP endpoint (port 5200), package management, session federation. See [Retriever Developer Guide](retriever-dev-guide.md) |
 | **zRover.Mcp.IntegrationTests** | net8.0 | 55 xUnit tests (unit + E2E) |
@@ -63,8 +65,8 @@ MCP Client (tests, AI agents, etc.)
 ## Prerequisites
 
 - **Windows 10/11** (Desktop)
-- **Visual Studio 2022** with the UWP workload
-- **.NET 9 SDK** (required for the Retriever; .NET 8 SDK also needed for the FullTrust server)
+- **Visual Studio 2022** with the **UWP** workload (for the UWP library and sample) and the **Windows App SDK / WinUI 3** workload (for the WinUI library and sample)
+- **.NET 9 SDK** (required for the Retriever; .NET 8 SDK also needed for the FullTrust server and the WinUI library)
 - **Developer Mode** enabled in Windows Settings → Privacy & Security → For Developers
 
 ## Building
@@ -72,6 +74,8 @@ MCP Client (tests, AI agents, etc.)
 All commands assume the working directory is the repository root.
 
 ### 1. Build and deploy the UWP app
+
+The steps below cover the UWP sample, which exercises the FullTrust + AppService IPC path. To work on the WinUI 3 library instead, use [`src/zRover.WinUI.Sample/deploy-dev.ps1`](../../src/zRover.WinUI.Sample/deploy-dev.ps1) which builds, signs, and installs `zRover.WinUI.Sample` as a dev MSIX (the in-process model has no FullTrust companion to sync).
 
 ```powershell
 # Resolve devenv.exe via vswhere (works for any VS edition/version)
@@ -157,4 +161,4 @@ $env:ZROVER_MCP_ENDPOINT = "http://localhost:5100/mcp"
 
 ## What's Not Yet Implemented
 
-- **Non-UWP platforms** — no WinUI 3 or WPF adapter; UWP only
+- **Non-XAML platforms** — no WPF or Win32 adapter; UWP and WinUI 3 only
